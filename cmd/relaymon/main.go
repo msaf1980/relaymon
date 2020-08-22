@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	carboncrelay "github.com/msaf1980/relaymon/pkg/carbon_c_relay"
 	"github.com/msaf1980/relaymon/pkg/carbonnetwork"
 	"github.com/msaf1980/relaymon/pkg/checker"
+	"github.com/msaf1980/relaymon/pkg/netconf"
 	"github.com/msaf1980/relaymon/pkg/systemd"
 
 	config "github.com/msaf1980/relaymon/config/relaymon"
@@ -107,6 +109,16 @@ func main() {
 		}
 	}()
 
+	addrs := make([]*net.IPNet, len(cfg.IPs))
+	for i := range cfg.IPs {
+		var ip net.IP
+		ip, addrs[i], err = net.ParseCIDR(cfg.IPs[i])
+		if err != nil {
+			log.Fatal().Msg(err.Error())
+		}
+		addrs[i].IP = ip
+	}
+
 	checkers := make([]CheckStatus, len(cfg.Services))
 	for i := range checkers {
 		checkers[i].Checker = systemd.NewServiceChecker(cfg.Services[i], cfg.FailCount, cfg.CheckCount, cfg.ResetCount)
@@ -170,6 +182,14 @@ func main() {
 				// checks failed
 				log.Error().Str("action", "down").Msg("go to error state")
 				status = checker.ErrorState
+				if len(cfg.IPs) > 0 {
+					errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
+					if len(errs) > 0 {
+						for i := range errs {
+							log.Error().Str("service", "netconf").Msg(errs[i].Error())
+						}
+					}
+				}
 				if len(cfg.ErrorCmd) > 0 {
 					out, err := execute(cfg.ErrorCmd)
 					if err == nil {
@@ -183,6 +203,14 @@ func main() {
 				// checks success
 				log.Info().Str("action", "up").Msg("go to success state")
 				status = checker.SuccessState
+				if len(cfg.IPs) > 0 {
+					errs := netconf.IfaceAddrAdd(cfg.Iface, addrs)
+					if len(errs) > 0 {
+						for i := range errs {
+							log.Error().Str("service", "netconf").Msg(errs[i].Error())
+						}
+					}
+				}
 				if len(cfg.SuccessCmd) > 0 {
 					out, err := execute(cfg.SuccessCmd)
 					if err == nil {
