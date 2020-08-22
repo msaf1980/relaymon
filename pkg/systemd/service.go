@@ -2,6 +2,7 @@ package systemd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -70,10 +71,17 @@ type Service struct {
 // ServiceState return SystemdService
 func ServiceState(name string) (*Service, error) {
 	service := &Service{PID: -1}
-	cmd := exec.Command("/bin/systemctl", "status", name)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "/bin/systemctl", "status", name)
 	var stdOut bytes.Buffer
 	cmd.Stdout = &stdOut
 	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		service.State = FailedState
+		return service, fmt.Errorf("service %s status timeout", name)
+	}
 	if err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if ok {
