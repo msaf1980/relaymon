@@ -41,7 +41,7 @@ func (c *Cluster) Check() (bool, []error) {
 			if err != nil {
 				out <- check{n, neterror.NewNetError(err)}
 			} else {
-				conn.SetReadDeadline(time.Now().Add(c.timeout))
+				_ = conn.SetReadDeadline(time.Now().Add(c.timeout))
 				_, err = conn.Write([]byte("test"))
 				conn.Close()
 				out <- check{n, neterror.NewNetError(err)}
