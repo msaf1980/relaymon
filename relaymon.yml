@@ -1,0 +1,33 @@
+#log_level: "info"
+#check_interval: 10s
+#check_count: 6
+#fail_count: 3
+#reset_count: 3
+#recovery_interval: 120s
+
+#net_timeout: 10
+
+#prefix: "graphite.relaymon"
+
+#recovery_cmd: ""
+#error_cmd: ""
+
+#iface: lo
+
+# IP addresses (up/down on success/failure)
+#ips: []
+
+#carbon_c_relay:
+#  config: ""
+#  required: []
+
+#services: []
+
+# For example, use for carbon-c-relay and if needed set required cluster (it's check must success)
+#carbon_c_relay:
+#  config: "/etc/carbon-c-relay.conf"
+#  required:
+#    - "moira"  
+#
+#services:
+#  - "carbon_c_relay"
