@@ -31,33 +31,23 @@ type CheckStatus struct {
 
 func logStatus(s checker.State, c *CheckStatus, errs []error) {
 	if s != c.Status {
+		if len(errs) > 0 {
+			for i := range errs {
+				log.Error().Str("service", c.Checker.Name()).Msg(errs[i].Error())
+			}
+		}
 		switch s {
 		case checker.CollectingState:
 			log.Info().Str("service", c.Checker.Name()).Msg("collecting state")
 		case checker.SuccessState:
 			log.Info().Str("service", c.Checker.Name()).Msg("state changed to success")
 		case checker.WarnState:
-			if len(errs) > 0 {
-				for i := range errs {
-					log.Error().Str("service", c.Checker.Name()).Msg(errs[i].Error())
-				}
-			}
 			log.Warn().Str("service", c.Checker.Name()).Msg("state changed to warning")
 		case checker.ErrorState:
-			if len(errs) > 0 {
-				for i := range errs {
-					log.Error().Str("service", c.Checker.Name()).Msg(errs[i].Error())
-				}
-			}
 			log.Error().Str("service", c.Checker.Name()).Msg("state changed to error")
 		case checker.NotFoundState:
 			log.Error().Str("service", c.Checker.Name()).Msg("not found")
 		default:
-			if len(errs) > 0 {
-				for i := range errs {
-					log.Error().Str("service", c.Checker.Name()).Msg(errs[i].Error())
-				}
-			}
 			log.Error().Str("service", c.Checker.Name()).Msg("unknown state")
 		}
 		c.Status = s
@@ -159,7 +149,6 @@ func main() {
 			logStatus(s, &checkers[i], errs)
 		}
 
-		success = 0
 		for i := range netCheckers {
 			s, errs := netCheckers[i].Checker.Status()
 			if s == checker.ErrorState {
@@ -195,7 +184,7 @@ func main() {
 				log.Info().Str("action", "up").Msg("go to success state")
 				status = checker.SuccessState
 				if len(cfg.SuccessCmd) > 0 {
-					out, err := execute(cfg.ErrorCmd)
+					out, err := execute(cfg.SuccessCmd)
 					if err == nil {
 						log.Info().Str("action", "up").Msg(out)
 					} else {

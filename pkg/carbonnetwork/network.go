@@ -121,7 +121,10 @@ func (n *NetworkChecker) Status() (checker.State, []error) {
 			}
 		}
 		for j := range clusterErrs {
-			clusterErr := fmt.Errorf("endpoint %s %s", n.clusters[i].Endpoints[j], clusterErrs[j].Error())
+			var clusterErr error
+			if clusterErrs[j] != nil {
+				clusterErr = fmt.Errorf("endpoint %s %s", n.clusters[i].Endpoints[j], clusterErrs[j].Error())
+			}
 			if n.clusters[i].Errors[j] != clusterErr {
 				n.clusters[i].Errors[j] = clusterErr
 				errs = append(errs, clusterErr)
