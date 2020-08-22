@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -60,6 +62,26 @@ func logStatus(s checker.State, c *CheckStatus, errs []error) {
 		}
 		c.Status = s
 	}
+}
+
+func execute(command string) (string, error) {
+	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("command timeout")
+	} else if err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if ok {
+			err = fmt.Errorf("command exit with %d", exitErr.ExitCode())
+		} else {
+			err = fmt.Errorf("command execute error with %s", err.Error())
+		}
+	}
+	return string(out), err
 }
 
 func main() {
@@ -159,10 +181,27 @@ func main() {
 				// checks failed
 				log.Error().Str("action", "down").Msg("go to error state")
 				status = checker.ErrorState
+				if len(cfg.ErrorCmd) > 0 {
+					out, err := execute(cfg.ErrorCmd)
+					if err == nil {
+						log.Error().Str("action", "down").Msg(out)
+					} else {
+						log.Error().Str("action", "down").Str("error", err.Error()).Msg(out)
+					}
+
+				}
 			} else if stepStatus == checker.SuccessState {
 				// checks success
 				log.Info().Str("action", "up").Msg("go to success state")
 				status = checker.SuccessState
+				if len(cfg.SuccessCmd) > 0 {
+					out, err := execute(cfg.ErrorCmd)
+					if err == nil {
+						log.Info().Str("action", "up").Msg(out)
+					} else {
+						log.Error().Str("action", "up").Str("error", err.Error()).Msg(out)
+					}
+				}
 			}
 		}
 

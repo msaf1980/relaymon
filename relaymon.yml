@@ -9,8 +9,8 @@
 
 #prefix: "graphite.relaymon"
 
-#recovery_cmd: ""
-#error_cmd: ""
+#success_cmd: []
+#error_cmd: []
 
 #iface: lo
 

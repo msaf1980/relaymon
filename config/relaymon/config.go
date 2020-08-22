@@ -26,8 +26,8 @@ type Config struct {
 
 	NetTimeout time.Duration `yaml:"net_timeout"`
 
-	ErrorCmd    string `yaml:"error_cmd"`
-	RecoveryCmd string `yaml:"recovery_cmd"`
+	ErrorCmd   string `yaml:"error_cmd"`
+	SuccessCmd string `yaml:"success_cmd"`
 
 	Iface string   `yaml:"iface"`
 	IPs   []string `yaml:"ips"`
@@ -86,7 +86,7 @@ func LoadConfig(configFile string, overrideLogLevel string) (*Config, error) {
 	if len(cfg.ErrorCmd) == 0 && len(cfg.IPs) == 0 {
 		return nil, fmt.Errorf("configuration: error_cmd or ips empthy")
 	}
-	if len(cfg.RecoveryCmd) == 0 && len(cfg.IPs) == 0 {
+	if len(cfg.SuccessCmd) == 0 && len(cfg.IPs) == 0 {
 		return nil, fmt.Errorf("configuration: recovery_cmd or ips empthy")
 	}
 
