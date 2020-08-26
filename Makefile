@@ -1,4 +1,5 @@
 NAME:=relaymon
+INTEGRATION:=./relaymontest.py
 
 GO ?= go
 
@@ -15,6 +16,9 @@ debug: FORCE
 test: FORCE
 	$(GO) test -coverprofile coverage.txt ./cmd/${NAME}
 	$(GO) test -coverprofile coverage.txt  ./...
+
+integration: FORCE
+	${INTEGRATION}
 
 clean:
 	@rm -f ./${NAME}

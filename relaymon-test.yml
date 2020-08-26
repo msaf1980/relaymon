@@ -1,10 +1,10 @@
-check_interval: 10s
+check_interval: 2s
 
-graphite_relay: "graphite-test.dev.kontur.ru"
+#graphite_relay: "graphite-test.dev.kontur.ru"
 prefix: "DevOps.carbon.relaymon.test"
 
-success_cmd: "echo UP"
-error_cmd: "echo DOWN"
+success_cmd: "echo -n UP"
+error_cmd: "echo -n DOWN"
 ips:
    - "192.168.155.10/24"
    - "192.168.155.11/24"
@@ -13,6 +13,6 @@ services:
   - "sshd"
 
 carbon_c_relay:
-  config: "/home/msv/config/carbon-c-relay/anyof3.conf"
+  config: "carbon-c-relay-test.conf"
   required:
     - "moira"
