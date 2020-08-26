@@ -66,7 +66,7 @@ func (g *GraphiteQueue) Run() {
 				if !g.graphite.IsConnected() {
 					err := g.graphite.Connect()
 					if err != nil {
-						g.graphite.Disconnect()
+						_ = g.graphite.Disconnect()
 						if !g.failed {
 							g.failed = true
 							log.Error().Str("relaymon", "metric").Msg(err.Error())
