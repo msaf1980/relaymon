@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/msaf1980/relaymon/pkg/checker"
@@ -43,7 +45,11 @@ func (c *Cluster) Check() (bool, []error) {
 			} else {
 				_ = conn.SetReadDeadline(time.Now().Add(c.timeout))
 				_, err = conn.Write([]byte("test"))
-				conn.Close()
+				if err == nil {
+					err = conn.Close()
+				} else {
+					conn.Close()
+				}
 				out <- check{n, neterror.NewNetError(err)}
 			}
 		}(out, i)
@@ -75,6 +81,7 @@ type NetworkChecker struct {
 	checked int
 
 	// check thresholds
+	metrics    []checker.Metric
 	failCount  int
 	checkCount int
 	resetCount int
@@ -86,13 +93,30 @@ type NetworkChecker struct {
 func NewNetworkChecker(name string, clusters []Cluster, timeout time.Duration,
 	failCount int, checkCount int, resetCount int) *NetworkChecker {
 
+	n := 0
+	for i := range clusters {
+		n += len(clusters[i].Endpoints)
+	}
+
 	network := &NetworkChecker{
 		name:       name,
 		clusters:   clusters,
 		failCount:  failCount,
 		checkCount: checkCount,
 		resetCount: resetCount,
+		metrics:    make([]checker.Metric, n),
 	}
+	n = 0
+	for i := range clusters {
+		for j := range clusters[i].Endpoints {
+			endpoint := strings.Replace(clusters[i].Endpoints[j], ".", "_", -1)
+			endpoint = strings.Replace(endpoint, ":", "_", -1)
+			network.metrics[n].Name = "network." + clusters[i].Name + "." + endpoint
+			network.metrics[n].Value = strconv.Itoa(int(checker.CollectingState))
+			n++
+		}
+	}
+
 	return network
 }
 
@@ -107,11 +131,12 @@ func (n *NetworkChecker) Name() string {
 }
 
 // Status get result of network status check
-func (n *NetworkChecker) Status() (checker.State, []error) {
+func (n *NetworkChecker) Status() (checker.State, []string) {
 	successCheck := true
-	errs := make([]error, 0, 10)
+	events := make([]string, 0)
 
 	failed := 0
+	k := 0
 	for i := range n.clusters {
 		clusterStatus, clusterErrs := n.clusters[i].Check()
 		if !clusterStatus {
@@ -121,14 +146,25 @@ func (n *NetworkChecker) Status() (checker.State, []error) {
 			}
 		}
 		for j := range clusterErrs {
-			var clusterErr error
 			if clusterErrs[j] != nil {
-				clusterErr = fmt.Errorf("endpoint %s %s", n.clusters[i].Endpoints[j], clusterErrs[j].Error())
+				errMetric := strconv.Itoa(int(checker.ErrorState))
+				if n.metrics[k].Value != errMetric {
+					n.metrics[k].Value = errMetric
+				}
+				if checker.ErrorChanged(n.clusters[i].Errors[j], clusterErrs[j]) {
+					events = append(events, fmt.Sprintf("endpoint %s %s", n.clusters[i].Endpoints[j], clusterErrs[j].Error()))
+				}
+			} else {
+				successMetric := strconv.Itoa(int(checker.SuccessState))
+				if n.metrics[k].Value != successMetric {
+					n.metrics[k].Value = successMetric
+				}
+				if checker.ErrorChanged(n.clusters[i].Errors[j], clusterErrs[j]) {
+					events = append(events, fmt.Sprintf("endpoint %s up", n.clusters[i].Endpoints[j]))
+				}
 			}
-			if n.clusters[i].Errors[j] != clusterErr {
-				n.clusters[i].Errors[j] = clusterErr
-				errs = append(errs, clusterErr)
-			}
+			n.clusters[i].Errors[j] = clusterErrs[j]
+			k++
 		}
 	}
 	if successCheck && failed == len(n.clusters) {
@@ -155,12 +191,17 @@ func (n *NetworkChecker) Status() (checker.State, []error) {
 		}
 	}
 	if n.checked < n.checkCount {
-		return checker.CollectingState, errs
+		return checker.CollectingState, events
 	} else if n.failed > 0 {
 		if n.failed >= n.failCount {
-			return checker.ErrorState, errs
+			return checker.ErrorState, events
 		}
-		return checker.WarnState, errs
+		return checker.WarnState, events
 	}
-	return checker.SuccessState, errs
+	return checker.SuccessState, events
+}
+
+// Metrics get metric for status check
+func (n *NetworkChecker) Metrics() []checker.Metric {
+	return n.metrics
 }

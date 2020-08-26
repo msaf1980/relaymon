@@ -116,9 +116,12 @@ func ServiceState(name string) (*Service, error) {
 type ServiceChecker struct {
 	name string
 
+	event string
+
 	Process *linuxproc.Proc
 
 	// check results
+	status  checker.State
 	failed  int
 	success int
 	checked int
@@ -136,6 +139,7 @@ func NewServiceChecker(name string, failCount int, checkCount int, resetCount in
 		failCount:  failCount,
 		checkCount: checkCount,
 		resetCount: resetCount,
+		status:     checker.CollectingState,
 	}
 	return service
 }
@@ -158,8 +162,17 @@ func (s *ServiceChecker) procExit() (bool, error) {
 	return *proc != *s.Process, nil
 }
 
+func (s *ServiceChecker) events(event string) []string {
+	events := make([]string, 0)
+	if event != s.event {
+		s.event = event
+		events = append(events, event)
+	}
+	return events
+}
+
 // Status get result of service status check
-func (s *ServiceChecker) Status() (checker.State, []error) {
+func (s *ServiceChecker) Status() (checker.State, []string) {
 	needRecheck := false
 	successCheck := false
 
@@ -171,7 +184,8 @@ func (s *ServiceChecker) Status() (checker.State, []error) {
 			s.failed = 0
 			s.success = 0
 			s.checked = 0
-			return checker.UnknownState, []error{procErr}
+
+			return checker.UnknownState, s.events(procErr.Error())
 		} else if exit {
 			// proc with this pid changed
 			if s.failed < math.MaxInt32 {
@@ -191,7 +205,8 @@ func (s *ServiceChecker) Status() (checker.State, []error) {
 				s.failed = 0
 				s.success = 0
 				s.checked = 0
-				return checker.UnknownState, []error{err}
+				s.status = checker.UnknownState
+				return s.status, s.events(err.Error())
 			default:
 				if s.failed < math.MaxInt32 {
 					s.failed++
@@ -208,7 +223,8 @@ func (s *ServiceChecker) Status() (checker.State, []error) {
 					s.failed = 0
 					s.success = 0
 					s.checked = 0
-					return checker.UnknownState, []error{procErr}
+					s.status = checker.UnknownState
+					return s.status, s.events(procErr.Error())
 				}
 			} else {
 				if proc.PPID != systemdPID || proc.ProcName != service.ProcName {
@@ -239,12 +255,21 @@ func (s *ServiceChecker) Status() (checker.State, []error) {
 		s.success = 0
 	}
 	if s.checked < s.checkCount {
-		return checker.CollectingState, nil
+		s.status = checker.CollectingState
+		return s.status, nil
 	} else if s.failed > 0 {
 		if s.failed >= s.failCount {
-			return checker.ErrorState, nil
+			s.status = checker.ErrorState
+			return s.status, nil
 		}
-		return checker.WarnState, nil
+		s.status = checker.WarnState
+		return s.status, nil
 	}
-	return checker.SuccessState, nil
+	s.status = checker.SuccessState
+	return s.status, nil
+}
+
+// Metrics get metric for service status check
+func (s *ServiceChecker) Metrics() []checker.Metric {
+	return []checker.Metric{{Name: "systemd." + s.Name(), Value: string(int(s.status))}}
 }

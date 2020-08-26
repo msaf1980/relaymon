@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,23 +22,25 @@ import (
 	config "github.com/msaf1980/relaymon/config/relaymon"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
-var running bool = true
+var (
+	running bool = true
+	log     zerolog.Logger
+)
 
 type CheckStatus struct {
 	Checker checker.Checker
 	Status  checker.State
 }
 
-func logStatus(s checker.State, c *CheckStatus, errs []error) {
-	if s != c.Status {
-		if len(errs) > 0 {
-			for i := range errs {
-				log.Error().Str("service", c.Checker.Name()).Msg(errs[i].Error())
-			}
+func logStatus(s checker.State, c *CheckStatus, events []string) {
+	if len(events) > 0 {
+		for i := range events {
+			log.Error().Str("service", c.Checker.Name()).Msg(events[i])
 		}
+	}
+	if s != c.Status {
 		switch s {
 		case checker.CollectingState:
 			log.Info().Str("service", c.Checker.Name()).Msg("collecting state")
@@ -95,7 +98,7 @@ func main() {
 	}
 	zerolog.SetGlobalLevel(level)
 	multi := zerolog.MultiLevelWriter(os.Stdout)
-	log := zerolog.New(multi).With().Timestamp().Logger()
+	log = zerolog.New(multi).With().Timestamp().Logger()
 
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
@@ -126,8 +129,10 @@ func main() {
 
 	netCheckers := make([]CheckStatus, 0)
 
-	// carbon-c-relay
+	graphite, _ := GraphiteInit(cfg.Relay, cfg.Prefix, 4096, 14)
+	graphite.Run()
 
+	// carbon-c-relay
 	if cfg.CarbonCRelay.Config != "" {
 		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required)
 		if err != nil {
@@ -147,6 +152,7 @@ func main() {
 	checks := len(checkers) + len(netCheckers)
 	for running {
 		stepStatus := checker.CollectingState
+		timestamp := time.Now().Unix()
 
 		// services
 		success := 0
@@ -157,8 +163,12 @@ func main() {
 			} else if s == checker.SuccessState {
 				success++
 			}
-
 			logStatus(s, &checkers[i], errs)
+
+			metrics := checkers[i].Checker.Metrics()
+			for k := range metrics {
+				graphite.Put(metrics[k].Name, metrics[k].Value, timestamp)
+			}
 		}
 
 		for i := range netCheckers {
@@ -168,6 +178,10 @@ func main() {
 			} else if s == checker.SuccessState {
 				success++
 			}
+			metrics := netCheckers[i].Checker.Metrics()
+			for k := range metrics {
+				graphite.Put(metrics[k].Name, metrics[k].Value, timestamp)
+			}
 
 			logStatus(s, &netCheckers[i], errs)
 		}
@@ -175,6 +189,8 @@ func main() {
 		if success == checks {
 			stepStatus = checker.SuccessState
 		}
+
+		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
 
 		if status != stepStatus {
 			// status changed
@@ -224,4 +240,7 @@ func main() {
 
 		time.Sleep(cfg.CheckInterval)
 	}
+
+	graphite.Stop()
+	log.Info().Msg("shutdown")
 }

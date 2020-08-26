@@ -4,8 +4,11 @@ package checker
 type State int8
 
 const (
+	// CollectingState collecting state
+	CollectingState State = iota
+
 	// SuccessState success state
-	SuccessState State = iota
+	SuccessState
 
 	// WarnState warning state
 	WarnState
@@ -13,15 +16,22 @@ const (
 	// ErrorState error state
 	ErrorState
 
-	// CollectingState collecting state
-	CollectingState
-
 	// NotFoundState not found state (wrong check name or missed check object)
 	NotFoundState
 
 	// UnknownState unknown state (internal collector error)
 	UnknownState
 )
+
+// ErrorChanged detect error change
+func ErrorChanged(previous error, current error) bool {
+	if previous == current {
+		return false
+	} else if previous != nil && current != nil {
+		return previous.Error() != current.Error()
+	}
+	return true
+}
 
 // String get string for State
 func (s *State) String() string {
@@ -39,8 +49,16 @@ func (s *State) String() string {
 	}
 }
 
+type Metric struct {
+	Name string
+	Value string
+}
+
 // Checker interface
 type Checker interface {
 	Name() string
-	Status() (State, []error)
+	// Status return check status and events
+	Status() (State, []string)
+	// Return checker metrics
+	Metrics() []Metric
 }

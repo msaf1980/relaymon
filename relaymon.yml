@@ -7,6 +7,7 @@
 
 #net_timeout: 10
 
+#graphite_relay: ""
 #prefix: "graphite.relaymon"
 
 #success_cmd: []
