@@ -42,7 +42,19 @@ func ProcInfo(pid int64) (*Proc, error) {
 	if len(fields) < 22 {
 		return proc, fmt.Errorf("can't get pid stat")
 	}
-	proc.ProcName = fields[1]
+	if len(fields[1]) > 3 {
+		start := 0
+		if fields[1][0] == '(' {
+			start = 1
+		}
+		end := len(fields[1])
+		if fields[1][end-1] == ')' {
+			end--
+		}
+		proc.ProcName = fields[1][start:end]
+	} else {
+		proc.ProcName = fields[1]
+	}
 	proc.PPID, err = strconv.ParseInt(fields[3], 10, 64)
 	if err != nil {
 		return proc, err

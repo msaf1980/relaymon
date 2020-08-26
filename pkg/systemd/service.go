@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	rePID = regexp.MustCompile(` Main PID: +([0-9]+) (\([a-zA-Z0-9_\-]+\)?)`)
+	rePID = regexp.MustCompile(` Main PID: +([0-9]+) \(([a-zA-Z0-9_\-]+)\)`)
 )
 
 // State systemd service state
@@ -105,8 +105,12 @@ func ServiceState(name string) (*Service, error) {
 	if len(matches) == 0 {
 		err = fmt.Errorf("service %s can't extract pid", name)
 	} else {
-		service.PID, err = strconv.ParseInt(matches[1], 10, 64)
 		service.ProcName = matches[2]
+		service.PID, err = strconv.ParseInt(matches[1], 10, 64)
+		if err != nil {
+			service.State = UnknownState
+			return service, fmt.Errorf("service %s failed (parse pid from %s)", name, matches[1])
+		}
 	}
 
 	return service, err
