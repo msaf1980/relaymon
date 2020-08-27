@@ -204,16 +204,54 @@ func TestNetworkChecker_Status(t *testing.T) {
 	tests := []struct {
 		name     string
 		clusters []*Cluster
+		failures [][]FailureType
 		want     checker.State
 	}{
 		{
-			name:     "all_failed",
-			clusters: []*Cluster{},
-			want:     checker.ErrorState,
+			name: "all_failed",
+			clusters: []*Cluster{
+				NewCluster("all_failed", false).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+			},
+			failures: [][]FailureType{
+				[]FailureType{noListen, noReadWithClose},
+			},
+			want: checker.ErrorState,
+		},
+		{
+			name: "one_success",
+			clusters: []*Cluster{
+				NewCluster("one_success", false).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+			},
+			failures: [][]FailureType{
+				[]FailureType{noListen, noFailure},
+			},
+			want: checker.SuccessState,
+		},
+		{
+			name: "required_failed",
+			clusters: []*Cluster{
+				NewCluster("one_success", false).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+				NewCluster("all_failed", true).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+			},
+			failures: [][]FailureType{
+				[]FailureType{noListen, noFailure},
+				[]FailureType{noListen, noReadWithClose},
+			},
+			want: checker.ErrorState,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testFarm := newServerFarm(t)
+			for i := range tt.failures {
+				testFarm.AppendTCPServers(tt.clusters[i].Endpoints, tt.failures[i])
+			}
+			defer testFarm.Stop()
+
 			c := NewNetworkChecker(tt.name, tt.clusters, time.Second, failCount, checkCount, resetCount)
 			for i := 0; i < checkCount+1; i++ {
 				got, _ := c.Status(0)
