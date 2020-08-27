@@ -12,16 +12,18 @@ import (
 	"github.com/msaf1980/relaymon/pkg/linuxstat"
 )
 
-func getPIDName(pid int64) string {
+func getPIDName(t *testing.T, pid int64) string {
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("ps -fp %d -o comm | tail -1", pid))
 	var stdOut bytes.Buffer
 	cmd.Stdout = &stdOut
 	err := cmd.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-		return ""
+		t.Fatalf("Fatal error on get process name by pid: %s", err.Error())
 	}
 	s := strings.Replace(stdOut.String(), "\n", "", 1)
+	if s == "" {
+		t.Fatalf("Fatal error on get process name (can't extract from ps output)")
+	}
 	return s
 }
 
@@ -30,7 +32,7 @@ func TestProcInfo(t *testing.T) {
 		pid int64
 	}
 
-	proc1 := &Proc{PID: 1, PPID: 0, ProcName: getPIDName(1)}
+	proc1 := &Proc{PID: 1, PPID: 0, ProcName: getPIDName(t, 1)}
 	_, _, proc1.StartTime, _ = linuxstat.FileStatTimes("/proc/1")
 
 	tests := []struct {

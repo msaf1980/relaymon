@@ -13,27 +13,27 @@ import (
 	"github.com/msaf1980/relaymon/pkg/linuxproc"
 )
 
-func getServicePID(service string) int64 {
+func getServicePID(t *testing.T, service string) int64 {
 	cmd := exec.Command("sh", "-c",
 		fmt.Sprintf("/bin/systemctl status %s | grep 'Main PID:' | awk '{ print $3; }'", service))
 	var stdOut bytes.Buffer
 	cmd.Stdout = &stdOut
 	err := cmd.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		t.Fatalf("Fatal error on get service pid: %s", err.Error())
 		return -1
 	}
 	s := strings.Replace(stdOut.String(), "\n", "", 1)
 	pid, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "%s", err.Error())
 		return -1
 	}
 	return pid
 }
 
 // ServiceState return SystemdService
-func getServiceForTest(running bool) (string, *Service) {
+func getServiceForTest(t *testing.T, running bool) (string, *Service) {
 	cmd := exec.Command("sh")
 	if running {
 		cmd.Args = []string{"sh", "-c", "/bin/systemctl -a | grep -w running | grep -w active | awk '{ print $1; }'  | grep '.service' | head -1"}
@@ -44,7 +44,7 @@ func getServiceForTest(running bool) (string, *Service) {
 	cmd.Stdout = &stdOut
 	err := cmd.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		t.Fatalf("Fatal error on tail service: %s", err.Error())
 		return "", nil
 	}
 	s := strings.Replace(stdOut.String(), "\n", "", 1)
@@ -54,10 +54,10 @@ func getServiceForTest(running bool) (string, *Service) {
 	service := &Service{}
 	if running {
 		service.State = StartedState
-		service.PID = getServicePID(s)
+		service.PID = getServicePID(t, s)
 		proc, err := linuxproc.ProcInfo(service.PID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			t.Fatalf("Fatal error on get service process: %s", err.Error())
 			service.ProcName = s
 		} else {
 			service.ProcName = proc.ProcName
@@ -70,8 +70,8 @@ func getServiceForTest(running bool) (string, *Service) {
 }
 
 func TestServiceState(t *testing.T) {
-	active, activeService := getServiceForTest(true)
-	inactive, inactiveService := getServiceForTest(false)
+	active, activeService := getServiceForTest(t, true)
+	inactive, inactiveService := getServiceForTest(t, false)
 
 	tests := []struct {
 		name    string
@@ -102,8 +102,8 @@ func TestServiceChecker_Status(t *testing.T) {
 	checkCount := 3
 	resetCount := 2
 
-	active, _ := getServiceForTest(true)
-	inactive, _ := getServiceForTest(false)
+	active, _ := getServiceForTest(t, true)
+	inactive, _ := getServiceForTest(t, false)
 
 	tests := []struct {
 		name string

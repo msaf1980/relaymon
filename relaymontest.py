@@ -9,6 +9,7 @@ import signal
 import subprocess
 import netifaces as ni
 
+
 def checkIPS(iface, ips):
     status = []
     found = 0
@@ -32,6 +33,7 @@ def printIPS(iface, ips, status, founded = True):
         elif not status[i][0] and not founded:
             sys.stderr.write("not configured %s on %s\n" % (ips[i][0], iface))
 
+
 def validateIPS(iface, ips, status):
     valid = True
     for i in range(len(ips)):
@@ -44,6 +46,7 @@ def validateIPS(iface, ips, status):
             valid = False
 
     return valid
+
 
 # Base test function
 def test(name, config, service, iface, ips, output, stageAction, stageResult):
