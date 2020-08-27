@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	rePID = regexp.MustCompile(` Main PID: +([0-9]+) \(([a-zA-Z0-9_\-]+)\)`)
+	rePID = regexp.MustCompile(` Main PID: +([0-9]+) (\([a-zA-Z0-9_\-]+\)?)`)
 )
 
 // State systemd service state

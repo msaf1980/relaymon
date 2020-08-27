@@ -32,7 +32,7 @@ func TestProcInfo(t *testing.T) {
 		pid int64
 	}
 
-	proc1 := &Proc{PID: 1, PPID: 0, ProcName: getPIDName(t, 1)}
+	proc1 := &Proc{PID: 1, PPID: 0, ProcName: "(" + getPIDName(t, 1) + ")"}
 	_, _, proc1.StartTime, _ = linuxstat.FileStatTimes("/proc/1")
 
 	tests := []struct {

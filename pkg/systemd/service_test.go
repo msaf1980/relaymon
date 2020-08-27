@@ -106,16 +106,17 @@ func TestServiceChecker_Status(t *testing.T) {
 	inactive, _ := getServiceForTest(t, false)
 
 	tests := []struct {
-		name string
-		want checker.State
+		name    string
+		service string
+		want    checker.State
 	}{
-		{"not_found", checker.ErrorState},
-		{active, checker.SuccessState},
-		{inactive, checker.ErrorState},
+		{"not_found", "not_found", checker.ErrorState},
+		{"active", active, checker.SuccessState},
+		{"inactive", inactive, checker.ErrorState},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewServiceChecker(tt.name, failCount, checkCount, resetCount)
+			s := NewServiceChecker(tt.service, failCount, checkCount, resetCount)
 			for i := 0; i < checkCount+1; i++ {
 				got, _ := s.Status()
 				if i < checkCount-1 {
