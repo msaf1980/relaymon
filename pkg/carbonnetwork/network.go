@@ -28,8 +28,8 @@ type check struct {
 }
 
 // NewCluster alloc new cluster instance
-func NewCluster(name string, required bool, testPrefix string) *Cluster {
-	return &Cluster{Name: name, Required: required, testPrefix: testPrefix}
+func NewCluster(name string, required bool, testPrefix string, timeout time.Duration) *Cluster {
+	return &Cluster{Name: name, Required: required, testPrefix: testPrefix, timeout: timeout}
 }
 
 // Append append cluster endpoint

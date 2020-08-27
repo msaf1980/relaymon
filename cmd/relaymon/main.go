@@ -37,7 +37,7 @@ type CheckStatus struct {
 func logStatus(s checker.State, c *CheckStatus, events []string) {
 	if len(events) > 0 {
 		for i := range events {
-			log.Error().Str("service", c.Checker.Name()).Msg(events[i])
+			log.Info().Str("service", c.Checker.Name()).Msg(events[i])
 		}
 	}
 	if s != c.Status {
@@ -134,7 +134,7 @@ func main() {
 
 	// carbon-c-relay
 	if cfg.CarbonCRelay.Config != "" {
-		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix)
+		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix, cfg.NetTimeout)
 		if err != nil {
 			log.Error().Str("carbon-c-relay", "load config").Msg(err.Error())
 		} else {
@@ -209,7 +209,7 @@ func main() {
 				if len(cfg.ErrorCmd) > 0 {
 					out, err := execute(cfg.ErrorCmd)
 					if err == nil {
-						log.Error().Str("action", "down").Msg(out)
+						log.Info().Str("action", "down").Msg(out)
 					} else {
 						log.Error().Str("action", "down").Str("error", err.Error()).Msg(out)
 					}
@@ -242,6 +242,9 @@ func main() {
 		}
 
 		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
+		if !running {
+			break
+		}
 		time.Sleep(cfg.CheckInterval)
 	}
 

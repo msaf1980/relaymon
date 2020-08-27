@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/msaf1980/relaymon/pkg/carbonnetwork"
 )
@@ -17,7 +18,7 @@ var (
 	stopList  = map[string]bool{"proto": true, "type": true, "transport": true}
 )
 
-func clusterEndpoints(fields []string, required map[string]bool, testPrefix string) (*carbonnetwork.Cluster, error) {
+func clusterEndpoints(fields []string, required map[string]bool, testPrefix string, timeout time.Duration) (*carbonnetwork.Cluster, error) {
 	if len(fields) < 4 {
 		return nil, fmt.Errorf("incomplete cluster")
 	}
@@ -25,7 +26,7 @@ func clusterEndpoints(fields []string, required map[string]bool, testPrefix stri
 
 	name := fields[1]
 	_, ok := required[name]
-	cluster := carbonnetwork.NewCluster(name, ok, testPrefix)
+	cluster := carbonnetwork.NewCluster(name, ok, testPrefix, timeout)
 	i := 2
 	for i < len(fields) {
 		if fields[i] == "file" {
@@ -67,7 +68,7 @@ func clusterEndpoints(fields []string, required map[string]bool, testPrefix stri
 }
 
 // Clusters parse config and return clusters
-func Clusters(config string, required []string, testPrefix string) ([]*carbonnetwork.Cluster, error) {
+func Clusters(config string, required []string, testPrefix string, timeout time.Duration) ([]*carbonnetwork.Cluster, error) {
 	clusters := make([]*carbonnetwork.Cluster, 0, 2)
 	file, err := os.Open(config)
 	if err != nil {
@@ -102,7 +103,7 @@ func Clusters(config string, required []string, testPrefix string) ([]*carbonnet
 			}
 		} else if strings.HasPrefix(line, "cluster ") {
 			if len(clusterFields) > 0 {
-				cluster, err := clusterEndpoints(clusterFields, r, testPrefix)
+				cluster, err := clusterEndpoints(clusterFields, r, testPrefix, timeout)
 				if cluster != nil && err == nil {
 					clusters = append(clusters, cluster)
 				}
@@ -125,7 +126,7 @@ func Clusters(config string, required []string, testPrefix string) ([]*carbonnet
 	}
 
 	if len(clusterFields) > 0 {
-		cluster, err := clusterEndpoints(clusterFields, r, testPrefix)
+		cluster, err := clusterEndpoints(clusterFields, r, testPrefix, timeout)
 		if cluster != nil && err == nil {
 			clusters = append(clusters, cluster)
 		}

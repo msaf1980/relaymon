@@ -4,12 +4,14 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/msaf1980/relaymon/pkg/carbonnetwork"
 )
 
 func TestClusters(t *testing.T) {
 	prefix := "relaymon"
+	timeout := time.Second
 
 	tests := []struct {
 		config   string
@@ -28,7 +30,7 @@ func TestClusters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.config, func(t *testing.T) {
-			got, err := Clusters(tt.config, tt.required, prefix)
+			got, err := Clusters(tt.config, tt.required, prefix, timeout)
 			if err != nil {
 				t.Errorf("Clusters() error = %v", err)
 				return

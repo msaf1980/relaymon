@@ -139,6 +139,7 @@ func (f *serversFarm) Stop() {
 
 func TestCluster_Check(t *testing.T) {
 	prefix := "relaymon"
+	timeout := time.Second
 
 	tests := []struct {
 		name           string
@@ -149,7 +150,7 @@ func TestCluster_Check(t *testing.T) {
 	}{
 		{
 			name: "All must failed",
-			cluster: NewCluster("all_failed", false, prefix).
+			cluster: NewCluster("all_failed", false, prefix, timeout).
 				Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noListen, noReadWithClose},
 			want:           false,
@@ -157,7 +158,7 @@ func TestCluster_Check(t *testing.T) {
 		},
 		{
 			name: "One must successed",
-			cluster: NewCluster("one_successed", false, prefix).
+			cluster: NewCluster("one_successed", false, prefix, timeout).
 				Append("127.0.0.1:0").Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noListen, noReadWithClose, noFailure},
 			want:           true,
@@ -165,7 +166,7 @@ func TestCluster_Check(t *testing.T) {
 		},
 		{
 			name: "All successed",
-			cluster: NewCluster("all_successed", false, prefix).
+			cluster: NewCluster("all_successed", false, prefix, timeout).
 				Append("127.0.0.1:0").Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noFailure, noFailure, noFailure},
 			want:           true,
@@ -204,6 +205,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 	checkCount := 3
 	resetCount := 2
 	prefix := "relaymon"
+	timeout := time.Second
 
 	tests := []struct {
 		name        string
@@ -215,7 +217,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "all_failed",
 			clusters: []*Cluster{
-				NewCluster("all_failed", false, prefix).
+				NewCluster("all_failed", false, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
@@ -226,7 +228,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "one_success",
 			clusters: []*Cluster{
-				NewCluster("one_success", false, prefix).
+				NewCluster("one_success", false, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
@@ -237,9 +239,9 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "required_failed",
 			clusters: []*Cluster{
-				NewCluster("one_success", false, prefix).
+				NewCluster("one_success", false, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
-				NewCluster("all_failed", true, prefix).
+				NewCluster("all_failed", true, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
@@ -251,9 +253,9 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "required_success",
 			clusters: []*Cluster{
-				NewCluster("one_success", true, prefix).
+				NewCluster("one_success", true, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
-				NewCluster("all_failed", false, prefix).
+				NewCluster("all_failed", false, prefix, timeout).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
