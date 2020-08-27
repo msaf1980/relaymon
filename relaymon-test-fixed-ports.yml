@@ -13,6 +13,6 @@ services:
   - "sshd"
 
 carbon_c_relay:
-  config: "/tmp/relaymon-carbon-c-relay-test.conf"
+  config: "carbon-c-relay-test.conf"
   required:
     - "moira"
