@@ -106,25 +106,41 @@ func TestServiceChecker_Status(t *testing.T) {
 	inactive, _ := getServiceForTest(t, false)
 
 	tests := []struct {
-		name    string
-		service string
-		want    checker.State
+		name        string
+		service     string
+		want        checker.State
+		wantMetrics []string
 	}{
-		{"not_found", "not_found", checker.ErrorState},
-		{"active", active, checker.SuccessState},
-		{"inactive", inactive, checker.ErrorState},
+		{
+			name: "not_found", service: "not_found", want: checker.ErrorState,
+			wantMetrics: []string{"systemd.not_found"},
+		},
+		{
+			name: "active", service: active, want: checker.SuccessState,
+			wantMetrics: []string{"systemd." + active},
+		},
+		{
+			name: "inactive", service: inactive, want: checker.ErrorState,
+			wantMetrics: []string{"systemd." + inactive},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewServiceChecker(tt.service, failCount, checkCount, resetCount)
 			for i := 0; i < checkCount+1; i++ {
 				got, _ := s.Status(0)
-				if i < checkCount-1 {
-					if got != checker.CollectingState {
-						t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, checker.CollectingState)
+				want := checker.CollectingState
+				if i >= checkCount-1 {
+					want = tt.want
+				}
+				if got != want {
+					t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, want)
+				}
+				metrics := s.Metrics()
+				for j := range metrics {
+					if metrics[j].Name != tt.wantMetrics[j] || metrics[j].Value != strconv.Itoa(int(want)) {
+						t.Errorf("Step %d ServiceChecker.Metrics()[%d] got = %v, want %v", i, j, metrics[j], tt.wantMetrics[j])
 					}
-				} else if got != tt.want {
-					t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, tt.want)
 				}
 			}
 		})

@@ -275,5 +275,5 @@ func (s *ServiceChecker) Status(timestamp int64) (checker.State, []string) {
 
 // Metrics get metric for service status check
 func (s *ServiceChecker) Metrics() []checker.Metric {
-	return []checker.Metric{{Name: "systemd." + s.Name(), Value: string(int(s.status))}}
+	return []checker.Metric{{Name: "systemd." + s.Name(), Value: strconv.Itoa(int(s.status))}}
 }
