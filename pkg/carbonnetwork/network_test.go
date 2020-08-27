@@ -248,6 +248,20 @@ func TestNetworkChecker_Status(t *testing.T) {
 			},
 			want: checker.ErrorState,
 		},
+		{
+			name: "required_success",
+			clusters: []*Cluster{
+				NewCluster("one_success", true, prefix).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+				NewCluster("all_failed", false, prefix).
+					Append("127.0.0.1:0").Append("127.0.0.1:0"),
+			},
+			failures: [][]FailureType{
+				[]FailureType{noListen, noFailure},
+				[]FailureType{noListen, noReadWithClose},
+			},
+			want: checker.SuccessState,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
