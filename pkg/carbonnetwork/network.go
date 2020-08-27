@@ -35,7 +35,7 @@ func NewCluster(name string, required bool) *Cluster {
 func (c *Cluster) Append(endpoint string) *Cluster {
 	c.Endpoints = append(c.Endpoints, endpoint)
 	c.Errors = append(c.Errors, nil)
-	testMetric := fmt.Sprintf("test.network.%s.%s ", checker.Strip(c.Name), checker.Strip(endpoint))
+	testMetric := fmt.Sprintf("test.network.carbon.%s.%s ", checker.Strip(c.Name), checker.Strip(endpoint))
 	c.TestMetrics = append(c.TestMetrics, testMetric)
 	return c
 }
@@ -123,7 +123,7 @@ func NewNetworkChecker(name string, clusters []*Cluster, timeout time.Duration,
 	n = 0
 	for i := range clusters {
 		for j := range clusters[i].Endpoints {
-			network.metrics[n].Name = "network." + checker.Strip(clusters[i].Name) + "." + checker.Strip(clusters[i].Endpoints[j])
+			network.metrics[n].Name = "network.carbon." + checker.Strip(clusters[i].Name) + "." + checker.Strip(clusters[i].Endpoints[j])
 			network.metrics[n].Value = strconv.Itoa(int(checker.CollectingState))
 			n++
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -202,10 +203,11 @@ func TestNetworkChecker_Status(t *testing.T) {
 	resetCount := 2
 
 	tests := []struct {
-		name     string
-		clusters []*Cluster
-		failures [][]FailureType
-		want     checker.State
+		name        string
+		clusters    []*Cluster
+		failures    [][]FailureType
+		want        checker.State
+		wantMetrics []string
 	}{
 		{
 			name: "all_failed",
@@ -253,14 +255,42 @@ func TestNetworkChecker_Status(t *testing.T) {
 			defer testFarm.Stop()
 
 			c := NewNetworkChecker(tt.name, tt.clusters, time.Second, failCount, checkCount, resetCount)
+			for k := range tt.clusters {
+				for e := range tt.clusters[k].Endpoints {
+					tt.wantMetrics = append(tt.wantMetrics,
+						fmt.Sprintf("network.carbon.%s.%s", checker.Strip(tt.clusters[k].Name), checker.Strip(tt.clusters[k].Endpoints[e])),
+					)
+				}
+			}
 			for i := 0; i < checkCount+1; i++ {
 				got, _ := c.Status(0)
-				if i < checkCount-1 {
-					if got != checker.CollectingState {
-						t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, checker.CollectingState)
+				want := checker.CollectingState
+				if i >= checkCount-1 {
+					want = tt.want
+				}
+				if got != want {
+					t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, want)
+				}
+				metrics := c.Metrics()
+				n := 0
+				for k := range tt.clusters {
+					for e := range tt.clusters[k].Endpoints {
+						want := checker.ErrorState
+						if tt.failures[k][e] == noFailure {
+							want = checker.SuccessState
+						}
+						if metrics[n].Name != tt.wantMetrics[n] {
+							t.Errorf("Step %d ServiceChecker.Metrics()[%d] name got = '%s', want '%s'", i, n,
+								metrics[n].Name, tt.wantMetrics[n],
+							)
+						}
+						if metrics[n].Value != strconv.Itoa(int(want)) {
+							t.Errorf("Step %d ServiceChecker.Metrics()[%d] got = %v, want %v", i, n,
+								metrics[n], checker.Metric{Name: tt.wantMetrics[n], Value: strconv.Itoa(int(want))},
+							)
+						}
+						n++
 					}
-				} else if got != tt.want {
-					t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, tt.want)
 				}
 			}
 		})
