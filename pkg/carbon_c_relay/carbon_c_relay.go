@@ -23,7 +23,9 @@ func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork
 	}
 	var err error
 
-	cluster := &carbonnetwork.Cluster{Name: fields[1]}
+	name := fields[1]
+	_, ok := required[name]
+	cluster := carbonnetwork.NewCluster(name, ok)
 	i := 2
 	for i < len(fields) {
 		if fields[i] == "file" {
@@ -55,11 +57,6 @@ func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork
 		}
 
 		i++
-	}
-
-	_, ok := required[cluster.Name]
-	if ok {
-		cluster.Required = true
 	}
 
 	if len(cluster.Endpoints) == 0 {

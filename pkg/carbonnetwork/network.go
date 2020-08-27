@@ -26,10 +26,16 @@ type check struct {
 	Err error
 }
 
+// NewCluster alloc new cluster instance
+func NewCluster(name string, required bool) *Cluster {
+	return &Cluster{Name: name, Required: required}
+}
+
 // Append append cluster endpoint
-func (c *Cluster) Append(endpoint string) {
+func (c *Cluster) Append(endpoint string) *Cluster {
 	c.Endpoints = append(c.Endpoints, endpoint)
 	c.Errors = append(c.Errors, nil)
+	return c
 }
 
 // Check cluster status (success, errors)
@@ -44,11 +50,17 @@ func (c *Cluster) Check() (bool, []error) {
 				out <- check{n, neterror.NewNetError(err)}
 			} else {
 				_ = conn.SetReadDeadline(time.Now().Add(c.timeout))
-				_, err = conn.Write([]byte("test"))
-				if err == nil {
-					err = conn.Close()
-				} else {
+				for i := 0; i < 2; i++ {
+					_, err = conn.Write([]byte("test"))
+					if err != nil {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				if err != nil {
 					conn.Close()
+				} else {
+					err = conn.Close()
 				}
 				out <- check{n, neterror.NewNetError(err)}
 			}

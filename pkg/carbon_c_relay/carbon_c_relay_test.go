@@ -1,9 +1,7 @@
 package carboncrelay
 
 import (
-	"path/filepath"
 	"reflect"
-	"runtime"
 	"strconv"
 	"testing"
 
@@ -11,9 +9,6 @@ import (
 )
 
 func TestClusters(t *testing.T) {
-	_, filename, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(filename)
-
 	tests := []struct {
 		config   string
 		required []string
@@ -31,7 +26,7 @@ func TestClusters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.config, func(t *testing.T) {
-			got, err := Clusters(filepath.Join(dir, tt.config), tt.required)
+			got, err := Clusters(tt.config, tt.required)
 			if err != nil {
 				t.Errorf("Clusters() error = %v", err)
 				return
