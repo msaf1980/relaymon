@@ -157,7 +157,7 @@ func main() {
 		// services
 		success := 0
 		for i := range checkers {
-			s, errs := checkers[i].Checker.Status()
+			s, errs := checkers[i].Checker.Status(timestamp)
 			if s == checker.ErrorState {
 				stepStatus = checker.ErrorState
 			} else if s == checker.SuccessState {
@@ -172,7 +172,7 @@ func main() {
 		}
 
 		for i := range netCheckers {
-			s, errs := netCheckers[i].Checker.Status()
+			s, errs := netCheckers[i].Checker.Status(timestamp)
 			if s == checker.ErrorState {
 				stepStatus = checker.ErrorState
 			} else if s == checker.SuccessState {

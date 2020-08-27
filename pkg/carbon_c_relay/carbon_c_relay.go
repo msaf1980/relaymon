@@ -67,8 +67,8 @@ func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork
 }
 
 // Clusters parse config and return clusters
-func Clusters(config string, required []string) ([]carbonnetwork.Cluster, error) {
-	clusters := make([]carbonnetwork.Cluster, 0, 2)
+func Clusters(config string, required []string) ([]*carbonnetwork.Cluster, error) {
+	clusters := make([]*carbonnetwork.Cluster, 0, 2)
 	file, err := os.Open(config)
 	if err != nil {
 		return clusters, err
@@ -104,7 +104,7 @@ func Clusters(config string, required []string) ([]carbonnetwork.Cluster, error)
 			if len(clusterFields) > 0 {
 				cluster, err := clusterEndpoints(clusterFields, r)
 				if cluster != nil && err == nil {
-					clusters = append(clusters, *cluster)
+					clusters = append(clusters, cluster)
 				}
 				clusterFields = make([]string, 0)
 			}
@@ -127,7 +127,7 @@ func Clusters(config string, required []string) ([]carbonnetwork.Cluster, error)
 	if len(clusterFields) > 0 {
 		cluster, err := clusterEndpoints(clusterFields, r)
 		if cluster != nil && err == nil {
-			clusters = append(clusters, *cluster)
+			clusters = append(clusters, cluster)
 		}
 	}
 

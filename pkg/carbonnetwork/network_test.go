@@ -1,8 +1,13 @@
 package carbonnetwork
 
 import (
+	"fmt"
 	"net"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/msaf1980/relaymon/pkg/checker"
 )
 
 type FailureType int8
@@ -25,14 +30,13 @@ type tcpServer struct {
 	conns   chan net.Conn
 	stop    chan bool
 	running bool
-	t       *testing.T
 }
 
 func newTCPServer(t *testing.T, address string, failure FailureType) server {
-	s := &tcpServer{failure: failure, t: t}
+	s := &tcpServer{failure: failure}
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
-		s.t.Fatalf("listen failed: %s", err.Error())
+		t.Fatalf("listen failed: %s", err.Error())
 	}
 	s.address = ln.Addr().String()
 	if failure == noListen {
@@ -75,7 +79,7 @@ func (s *tcpServer) accept() {
 			conn, err := s.ln.Accept()
 			if err != nil {
 				if s.running {
-					s.t.Fatalf("Error accepting connection: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Error accepting connection: %s\n", err.Error())
 				} else {
 					break
 				}
@@ -156,6 +160,14 @@ func TestCluster_Check(t *testing.T) {
 			want:           true,
 			wantErr:        []bool{true, true, false},
 		},
+		{
+			name: "All successed",
+			cluster: NewCluster("all_successed", false).
+				Append("127.0.0.1:0").Append("127.0.0.1:0").Append("127.0.0.1:0"),
+			serversFailure: []FailureType{noFailure, noFailure, noFailure},
+			want:           true,
+			wantErr:        []bool{false, false, false},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -163,7 +175,7 @@ func TestCluster_Check(t *testing.T) {
 			testFarm.AppendTCPServers(tt.cluster.Endpoints, tt.serversFailure)
 			defer testFarm.Stop()
 
-			got, gotErr := tt.cluster.Check()
+			got, gotErr := tt.cluster.Check(0)
 			if got != tt.want {
 				t.Errorf("%s Cluster.Check() got = %v, want %v", tt.cluster.Name, got, tt.want)
 			}
@@ -178,6 +190,39 @@ func TestCluster_Check(t *testing.T) {
 							tt.cluster.Endpoints[i], gotErr[i].Error(), tt.cluster.Name, i,
 						)
 					}
+				}
+			}
+		})
+	}
+}
+
+func TestNetworkChecker_Status(t *testing.T) {
+	failCount := 2
+	checkCount := 3
+	resetCount := 2
+
+	tests := []struct {
+		name     string
+		clusters []*Cluster
+		want     checker.State
+	}{
+		{
+			name:     "all_failed",
+			clusters: []*Cluster{},
+			want:     checker.ErrorState,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewNetworkChecker(tt.name, tt.clusters, time.Second, failCount, checkCount, resetCount)
+			for i := 0; i < checkCount+1; i++ {
+				got, _ := c.Status(0)
+				if i < checkCount-1 {
+					if got != checker.CollectingState {
+						t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, checker.CollectingState)
+					}
+				} else if got != tt.want {
+					t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, tt.want)
 				}
 			}
 		})

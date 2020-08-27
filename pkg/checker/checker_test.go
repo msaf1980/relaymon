@@ -26,3 +26,22 @@ func TestErrorChanged(t *testing.T) {
 		})
 	}
 }
+
+func TestStrip(t *testing.T) {
+	tests := []struct {
+		arg  string
+		want string
+	}{
+		{"test", "test"},
+		{"test:1", "test_1"},
+		{`test~!@#$%^&*()+=|\:`, "test_"},
+		{`test~!@#$%^1&*()+=|\:`, "test_1_"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.arg, func(t *testing.T) {
+			if got := Strip(tt.arg); got != tt.want {
+				t.Errorf("Strip() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

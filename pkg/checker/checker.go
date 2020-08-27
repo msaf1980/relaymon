@@ -1,5 +1,9 @@
 package checker
 
+import (
+	"regexp"
+)
+
 // State check status
 type State int8
 
@@ -49,8 +53,15 @@ func (s *State) String() string {
 	}
 }
 
+// Strip for include as metric name part
+func Strip(s string) string {
+	reg := regexp.MustCompile(`[^a-zA-Z0-9_\-]+`)
+	return reg.ReplaceAllString(s, "_")
+}
+
+// Metric describe checker metric
 type Metric struct {
-	Name string
+	Name  string
 	Value string
 }
 
@@ -58,7 +69,7 @@ type Metric struct {
 type Checker interface {
 	Name() string
 	// Status return check status and events
-	Status() (State, []string)
+	Status(timestamp int64) (State, []string)
 	// Return checker metrics
 	Metrics() []Metric
 }

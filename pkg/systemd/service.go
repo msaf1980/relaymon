@@ -176,7 +176,7 @@ func (s *ServiceChecker) events(event string) []string {
 }
 
 // Status get result of service status check
-func (s *ServiceChecker) Status() (checker.State, []string) {
+func (s *ServiceChecker) Status(timestamp int64) (checker.State, []string) {
 	needRecheck := false
 	successCheck := false
 

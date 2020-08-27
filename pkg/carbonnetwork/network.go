@@ -5,7 +5,6 @@ import (
 	"math"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/msaf1980/relaymon/pkg/checker"
@@ -14,11 +13,12 @@ import (
 
 // Cluster describe group of network endpoints
 type Cluster struct {
-	Name      string
-	Endpoints []string
-	Errors    []error
-	timeout   time.Duration
-	Required  bool
+	Name        string
+	Endpoints   []string
+	TestMetrics []string
+	Errors      []error
+	timeout     time.Duration
+	Required    bool
 }
 
 type check struct {
@@ -35,11 +35,13 @@ func NewCluster(name string, required bool) *Cluster {
 func (c *Cluster) Append(endpoint string) *Cluster {
 	c.Endpoints = append(c.Endpoints, endpoint)
 	c.Errors = append(c.Errors, nil)
+	testMetric := fmt.Sprintf("test.network.%s.%s ", checker.Strip(c.Name), checker.Strip(endpoint))
+	c.TestMetrics = append(c.TestMetrics, testMetric)
 	return c
 }
 
 // Check cluster status (success, errors)
-func (c *Cluster) Check() (bool, []error) {
+func (c *Cluster) Check(timestamp int64) (bool, []error) {
 	out := make(chan check, len(c.Endpoints))
 	defer close(out)
 
@@ -50,16 +52,16 @@ func (c *Cluster) Check() (bool, []error) {
 				out <- check{n, neterror.NewNetError(err)}
 			} else {
 				_ = conn.SetReadDeadline(time.Now().Add(c.timeout))
-				for i := 0; i < 2; i++ {
-					_, err = conn.Write([]byte("test"))
+				send := []string{c.TestMetrics[n], " 1 ", strconv.FormatInt(timestamp, 10), "\n"}
+				for j := range send {
+					_, err = conn.Write([]byte(send[j]))
 					if err != nil {
+						conn.Close()
 						break
 					}
 					time.Sleep(10 * time.Millisecond)
 				}
-				if err != nil {
-					conn.Close()
-				} else {
+				if err == nil {
 					err = conn.Close()
 				}
 				out <- check{n, neterror.NewNetError(err)}
@@ -85,7 +87,7 @@ func (c *Cluster) Check() (bool, []error) {
 // NetworkChecker check group of network endpoints with tcp connect and write test
 type NetworkChecker struct {
 	name     string
-	clusters []Cluster
+	clusters []*Cluster
 
 	// check results
 	failed  int
@@ -102,7 +104,7 @@ type NetworkChecker struct {
 }
 
 // NewNetworkChecker return new systemd service instance
-func NewNetworkChecker(name string, clusters []Cluster, timeout time.Duration,
+func NewNetworkChecker(name string, clusters []*Cluster, timeout time.Duration,
 	failCount int, checkCount int, resetCount int) *NetworkChecker {
 
 	n := 0
@@ -121,9 +123,7 @@ func NewNetworkChecker(name string, clusters []Cluster, timeout time.Duration,
 	n = 0
 	for i := range clusters {
 		for j := range clusters[i].Endpoints {
-			endpoint := strings.Replace(clusters[i].Endpoints[j], ".", "_", -1)
-			endpoint = strings.Replace(endpoint, ":", "_", -1)
-			network.metrics[n].Name = "network." + clusters[i].Name + "." + endpoint
+			network.metrics[n].Name = "network." + checker.Strip(clusters[i].Name) + "." + checker.Strip(clusters[i].Endpoints[j])
 			network.metrics[n].Value = strconv.Itoa(int(checker.CollectingState))
 			n++
 		}
@@ -143,14 +143,14 @@ func (n *NetworkChecker) Name() string {
 }
 
 // Status get result of network status check
-func (n *NetworkChecker) Status() (checker.State, []string) {
+func (n *NetworkChecker) Status(timestamp int64) (checker.State, []string) {
 	successCheck := true
 	events := make([]string, 0)
 
 	failed := 0
 	k := 0
 	for i := range n.clusters {
-		clusterStatus, clusterErrs := n.clusters[i].Check()
+		clusterStatus, clusterErrs := n.clusters[i].Check(timestamp)
 		if !clusterStatus {
 			failed++
 			if n.clusters[i].Required {

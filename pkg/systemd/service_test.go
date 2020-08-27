@@ -118,7 +118,7 @@ func TestServiceChecker_Status(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewServiceChecker(tt.service, failCount, checkCount, resetCount)
 			for i := 0; i < checkCount+1; i++ {
-				got, _ := s.Status()
+				got, _ := s.Status(0)
 				if i < checkCount-1 {
 					if got != checker.CollectingState {
 						t.Errorf("Step %d ServiceChecker.Status() got = %v, want %v", i, got, checker.CollectingState)
