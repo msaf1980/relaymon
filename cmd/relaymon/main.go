@@ -134,7 +134,7 @@ func main() {
 
 	// carbon-c-relay
 	if cfg.CarbonCRelay.Config != "" {
-		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required)
+		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix)
 		if err != nil {
 			log.Error().Str("carbon-c-relay", "load config").Msg(err.Error())
 		} else {

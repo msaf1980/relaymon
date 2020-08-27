@@ -138,6 +138,8 @@ func (f *serversFarm) Stop() {
 }
 
 func TestCluster_Check(t *testing.T) {
+	prefix := "relaymon"
+
 	tests := []struct {
 		name           string
 		cluster        *Cluster
@@ -147,7 +149,7 @@ func TestCluster_Check(t *testing.T) {
 	}{
 		{
 			name: "All must failed",
-			cluster: NewCluster("all_failed", false).
+			cluster: NewCluster("all_failed", false, prefix).
 				Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noListen, noReadWithClose},
 			want:           false,
@@ -155,7 +157,7 @@ func TestCluster_Check(t *testing.T) {
 		},
 		{
 			name: "One must successed",
-			cluster: NewCluster("one_successed", false).
+			cluster: NewCluster("one_successed", false, prefix).
 				Append("127.0.0.1:0").Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noListen, noReadWithClose, noFailure},
 			want:           true,
@@ -163,7 +165,7 @@ func TestCluster_Check(t *testing.T) {
 		},
 		{
 			name: "All successed",
-			cluster: NewCluster("all_successed", false).
+			cluster: NewCluster("all_successed", false, prefix).
 				Append("127.0.0.1:0").Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			serversFailure: []FailureType{noFailure, noFailure, noFailure},
 			want:           true,
@@ -201,6 +203,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 	failCount := 2
 	checkCount := 3
 	resetCount := 2
+	prefix := "relaymon"
 
 	tests := []struct {
 		name        string
@@ -212,7 +215,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "all_failed",
 			clusters: []*Cluster{
-				NewCluster("all_failed", false).
+				NewCluster("all_failed", false, prefix).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
@@ -223,7 +226,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "one_success",
 			clusters: []*Cluster{
-				NewCluster("one_success", false).
+				NewCluster("one_success", false, prefix).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
@@ -234,9 +237,9 @@ func TestNetworkChecker_Status(t *testing.T) {
 		{
 			name: "required_failed",
 			clusters: []*Cluster{
-				NewCluster("one_success", false).
+				NewCluster("one_success", false, prefix).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
-				NewCluster("all_failed", true).
+				NewCluster("all_failed", true, prefix).
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{

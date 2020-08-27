@@ -17,7 +17,7 @@ var (
 	stopList  = map[string]bool{"proto": true, "type": true, "transport": true}
 )
 
-func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork.Cluster, error) {
+func clusterEndpoints(fields []string, required map[string]bool, testPrefix string) (*carbonnetwork.Cluster, error) {
 	if len(fields) < 4 {
 		return nil, fmt.Errorf("incomplete cluster")
 	}
@@ -25,7 +25,7 @@ func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork
 
 	name := fields[1]
 	_, ok := required[name]
-	cluster := carbonnetwork.NewCluster(name, ok)
+	cluster := carbonnetwork.NewCluster(name, ok, testPrefix)
 	i := 2
 	for i < len(fields) {
 		if fields[i] == "file" {
@@ -67,7 +67,7 @@ func clusterEndpoints(fields []string, required map[string]bool) (*carbonnetwork
 }
 
 // Clusters parse config and return clusters
-func Clusters(config string, required []string) ([]*carbonnetwork.Cluster, error) {
+func Clusters(config string, required []string, testPrefix string) ([]*carbonnetwork.Cluster, error) {
 	clusters := make([]*carbonnetwork.Cluster, 0, 2)
 	file, err := os.Open(config)
 	if err != nil {
@@ -102,7 +102,7 @@ func Clusters(config string, required []string) ([]*carbonnetwork.Cluster, error
 			}
 		} else if strings.HasPrefix(line, "cluster ") {
 			if len(clusterFields) > 0 {
-				cluster, err := clusterEndpoints(clusterFields, r)
+				cluster, err := clusterEndpoints(clusterFields, r, testPrefix)
 				if cluster != nil && err == nil {
 					clusters = append(clusters, cluster)
 				}
@@ -125,7 +125,7 @@ func Clusters(config string, required []string) ([]*carbonnetwork.Cluster, error
 	}
 
 	if len(clusterFields) > 0 {
-		cluster, err := clusterEndpoints(clusterFields, r)
+		cluster, err := clusterEndpoints(clusterFields, r, testPrefix)
 		if cluster != nil && err == nil {
 			clusters = append(clusters, cluster)
 		}

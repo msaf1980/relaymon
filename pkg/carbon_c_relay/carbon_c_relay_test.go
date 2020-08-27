@@ -9,6 +9,8 @@ import (
 )
 
 func TestClusters(t *testing.T) {
+	prefix := "relaymon"
+
 	tests := []struct {
 		config   string
 		required []string
@@ -26,7 +28,7 @@ func TestClusters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.config, func(t *testing.T) {
-			got, err := Clusters(tt.config, tt.required)
+			got, err := Clusters(tt.config, tt.required, prefix)
 			if err != nil {
 				t.Errorf("Clusters() error = %v", err)
 				return

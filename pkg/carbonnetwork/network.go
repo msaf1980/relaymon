@@ -16,6 +16,7 @@ type Cluster struct {
 	Name        string
 	Endpoints   []string
 	TestMetrics []string
+	testPrefix  string
 	Errors      []error
 	timeout     time.Duration
 	Required    bool
@@ -27,15 +28,15 @@ type check struct {
 }
 
 // NewCluster alloc new cluster instance
-func NewCluster(name string, required bool) *Cluster {
-	return &Cluster{Name: name, Required: required}
+func NewCluster(name string, required bool, testPrefix string) *Cluster {
+	return &Cluster{Name: name, Required: required, testPrefix: testPrefix}
 }
 
 // Append append cluster endpoint
 func (c *Cluster) Append(endpoint string) *Cluster {
 	c.Endpoints = append(c.Endpoints, endpoint)
 	c.Errors = append(c.Errors, nil)
-	testMetric := fmt.Sprintf("test.network.carbon.%s.%s ", checker.Strip(c.Name), checker.Strip(endpoint))
+	testMetric := fmt.Sprintf("%s.test.network.carbon.%s.%s ", c.testPrefix, checker.Strip(c.Name), checker.Strip(endpoint))
 	c.TestMetrics = append(c.TestMetrics, testMetric)
 	return c
 }
