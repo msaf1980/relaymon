@@ -190,8 +190,6 @@ func main() {
 			stepStatus = checker.SuccessState
 		}
 
-		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
-
 		if status != stepStatus {
 			// status changed
 			if stepStatus == checker.ErrorState {
@@ -202,8 +200,10 @@ func main() {
 					errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
 					if len(errs) > 0 {
 						for i := range errs {
-							log.Error().Str("service", "netconf").Msg(errs[i].Error())
+							log.Error().Str("action", "up").Msg(errs[i].Error())
 						}
+					} else {
+						log.Info().Str("action", "down").Msg("IP addresses deconfigured")
 					}
 				}
 				if len(cfg.ErrorCmd) > 0 {
@@ -217,14 +217,16 @@ func main() {
 				}
 			} else if stepStatus == checker.SuccessState {
 				// checks success
-				log.Info().Str("action", "up").Msg("go to success state")
 				status = checker.SuccessState
 				if len(cfg.IPs) > 0 {
 					errs := netconf.IfaceAddrAdd(cfg.Iface, addrs)
 					if len(errs) > 0 {
+						status = checker.ErrorState
 						for i := range errs {
-							log.Error().Str("service", "netconf").Msg(errs[i].Error())
+							log.Error().Str("action", "up").Msg(errs[i].Error())
 						}
+					} else {
+						log.Info().Str("action", "up").Msg("IP addresses configured")
 					}
 				}
 				if len(cfg.SuccessCmd) > 0 {
@@ -232,12 +234,14 @@ func main() {
 					if err == nil {
 						log.Info().Str("action", "up").Msg(out)
 					} else {
+						status = checker.ErrorState
 						log.Error().Str("action", "up").Str("error", err.Error()).Msg(out)
 					}
 				}
 			}
 		}
 
+		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
 		time.Sleep(cfg.CheckInterval)
 	}
 
