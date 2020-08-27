@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
-func ipExec(iface string, addr string, scope string, add bool) (string, error) {
+func ipExec(iface string, addr string, scope string, add bool) (string, error, []string) {
 	var ipArgs []string
 	if add {
 		ipArgs = []string{"ip", "addr", "add", "dev", iface, addr, "scope", scope}
@@ -28,12 +30,12 @@ func ipExec(iface string, addr string, scope string, add bool) (string, error) {
 	} else if err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if ok {
-			err = fmt.Errorf("command exit with %d", exitErr.ExitCode())
+			err = fmt.Errorf("code %d", exitErr.ExitCode())
 		} else {
-			err = fmt.Errorf("command execute error with %s", err.Error())
+			err = fmt.Errorf("code %s", err.Error())
 		}
 	}
-	return string(out), err
+	return string(out), err, ipArgs
 }
 
 // IPMaskEqual compare net.IPMask
@@ -87,9 +89,9 @@ func IfaceAddrAdd(iface string, a []*net.IPNet) []error {
 	for _, addr := range a {
 		if !FindIPNet(addr, addrs) {
 			//fmt.Printf("%s\n", addr.String())
-			out, err := ipExec(iface, addr.String(), "global", true)
+			out, err, args := ipExec(iface, addr.String(), "global", true)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s ip add %s with %s:\n%s", iface, addr.String(), err.Error(), out))
+				errs = append(errs, fmt.Errorf("%s with %s: %s", strings.Join(args, " "), err.Error(), out))
 			}
 		}
 	}
@@ -106,10 +108,12 @@ func IfaceAddrDel(iface string, a []*net.IPNet) []error {
 	}
 	for _, addr := range a {
 		if FindIPNet(addr, addrs) {
+			netmask, _ := addr.Mask.Size()
 			//fmt.Printf("%s\n", addr.IP.String())
-			out, err := ipExec(iface, addr.String(), "global", false)
+			delAddr := addr.IP.String() + "/" + strconv.Itoa(netmask)
+			out, err, args := ipExec(iface, delAddr, "global", false)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s ip del %s with %s:\n%s", iface, addr.IP.String(), err.Error(), out))
+				errs = append(errs, fmt.Errorf("%s with %s: %s", strings.Join(args, " "), err.Error(), out))
 			}
 		}
 	}
