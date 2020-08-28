@@ -3,4 +3,4 @@ Description=Dummy Service ${name} for relaymon testing
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/sleep 60000
+ExecStart=/bin/sleep 60000
