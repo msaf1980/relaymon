@@ -12,7 +12,7 @@ install:
 script:
 - make test
 - make
-- sudo make integration
+- sudo ./relaymontest.py -n
 #before_deploy:
 #- gem install fpm && make packages
 #- export RPM_PACKAGE_NAME=$(ls relaymon-*.x86_64.rpm | tail -n1)
