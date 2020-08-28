@@ -30,7 +30,9 @@ set +f; unset IFS
 
 [ "$RELEASE" == "" -a "$VERSION" != "" ] && RELEASE=0
 
-if ! echo $VERSION | egrep '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' >/dev/null; then
+if echo $VERSION | egrep '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' >/dev/null; then
+	VERSION=${VERSION:1:${#VERSION}}
+elif ! echo $VERSION | egrep '^[0-9]+\.[0-9]+(\.[0-9]+)?$' >/dev/null; then
 	echo "Revision: ${RELEASE}";
 	echo "Version: ${VERSION}";
 	echo
