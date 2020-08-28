@@ -19,6 +19,15 @@ test: FORCE
 	$(GO) test -coverprofile coverage.txt ./cmd/${NAME}
 	$(GO) test -coverprofile coverage.txt  ./...
 
+rpm: FORCE
+	./contrib/fpm/create_package.sh rpm
+
+deb: FORCE
+	./contrib/fpm/create_package.sh deb
+
+packages: FORCE
+	./contrib/fpm/create_package.sh rpm deb
+
 integration: FORCE
 	${INTEGRATION}
 
