@@ -13,6 +13,7 @@ import signal
 import socket
 import subprocess
 import netifaces as ni
+from netaddr import IPAddress
 from string import Template
 
 
@@ -36,6 +37,9 @@ def get_exception_loc():
     return (filename, lineno)
 
 
+def cmdIPDel(iface, ip, netmask, scope):
+    return "ip addr del dev %s %s/%s scope %s" % (iface, ip, IPAddress(netmask).netmask_bits(), scope)
+
 def checkIPS(iface, ips):
     status = []
     found = 0
@@ -55,7 +59,7 @@ def checkIPS(iface, ips):
 def printIPS(iface, ips, status, founded = True):
     for i in range(len(ips)):
         if status[i][0] and founded:
-            sys.stderr.write("configured %s on %s\n" % (ips[i][0], iface))
+            sys.stderr.write("configured %s/%s on %s\n" % (ips[i][0], ips[i][1], iface))
         elif not status[i][0] and not founded:
             sys.stderr.write("not configured %s on %s\n" % (ips[i][0], iface))
 
@@ -153,14 +157,13 @@ def handleConnection(conn, address):
 
 
 # Base test function (with 5 tcp servers for test)
-def test(name, config, service, iface, ips, output, stageAction, stageResult, serversListen):
-    test = "test Fail Success Fail #1"
+def test(testName, name, config, service, iface, ips, output, stageAction, stageResult, serversListen):
     success = False
 
     configRelayTpl = "carbon-c-relay-test.tpl"
     configRelay = "/tmp/relaymon-carbon-c-relay-test.conf"
 
-    logger = logging.getLogger("test")
+    logger = logging.getLogger(testName)
 
     servers = [
         Server("127.0.0.1", 0),
@@ -171,6 +174,7 @@ def test(name, config, service, iface, ips, output, stageAction, stageResult, se
     ]
     templateArgs = dict()
 
+    logger.info("start test")
     try:
         try:
             n = 0
@@ -285,11 +289,11 @@ def test(name, config, service, iface, ips, output, stageAction, stageResult, se
             for line in proc.stderr:
                 sys.stderr.write(line)
             if ec == 0 and success:
-                sys.stdout.write("SUCCESS %s\n" % test)
+                sys.stdout.write("SUCCESS %s\n" % testName)
                 return True
             else:
                 logger.error("%s exit with code %s", name, ec)
-                sys.stdout.write("FAILED %s\n" % test)
+                sys.stdout.write("FAILED %s\n" % testName)
                 return False
         except Exception as e:
             (file, line) = get_exception_loc()
@@ -304,6 +308,8 @@ def test(name, config, service, iface, ips, output, stageAction, stageResult, se
 
 
 def testNetworkFailSuccessFail1(name, config, service, iface, ips):
+    testName = "test Fail Success Fail #1"
+
     output = []
     stageAction = []
     stageResult = []
@@ -389,7 +395,7 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
     #     '{"level":"([a-z]+)","time":"2020-08-26T10:49:59Z","message":"shutdown"}', 
     # )
 
-    return test(name, config, service, iface, ips, output, stageAction, stageResult, serversListen)
+    return test(testName, name, config, service, iface, ips, output, stageAction, stageResult, serversListen)
 
 def main():
     args = parse_cmdline()
@@ -406,6 +412,7 @@ def main():
     service = "sshd"
     config = "relaymon-test.yml"
     iface = "lo"
+    scope = "global"
     ips = [("192.168.155.10", "255.255.255.0"), ("192.168.155.11", "255.255.255.0")]
 
     sys.stderr.write("%s will be stopped/restarted during test\n" % service)
@@ -415,19 +422,50 @@ def main():
     found, status = checkIPS(iface, ips)
     if found > 0:
         printIPS(iface, ips, status)
-        sys.stderr.write("For remove:\nip addr del dev lo IP/NETMASK scope global\n")
+        #sys.stderr.write("For remove:\nip addr del dev lo IP/NETMASK scope %s\n" % scope)
+        sys.stderr.write("For remove:\n")
+        n = 0
+        for ip in ips:
+            if status[n][1]:
+                sys.stderr.write("%s\n" % cmdIPDel(iface, ip[0], status[n][1], scope))
+            n += 1
+
         sys.exit(255)
 
-    if not testNetworkFailSuccessFail1(name, config, service, iface, ips):
-        success = False
+    interrupted = False
+    try:
+        if not testNetworkFailSuccessFail1(name, config, service, iface, ips):
+            success = False
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        logger = logging.getLogger("cleanup")
 
-    if success:
-        sys.stdout.write("SUCCESS\n")
-        sys.exit(0)
-    else:
-        sys.stdout.write("FAILED\n")
-        sys.exit(1)
+    found, status = checkIPS(iface, ips)
+    if found > 0:
+        printIPS(iface, ips, status)
+        #sys.stderr.write("For remove:\nip addr del dev lo IP/NETMASK scope %s\n" % scope)
+        sys.stderr.write("For remove:\n")
+        n = 0
+        for ip in ips:
+            cmd = ip
+            try:
+                if status[n][1]:
+                    cmd = cmdIPDel(iface, ip[0], ip[1], scope)
+                    subprocess.call(cmd, shell = True)
+                    logger.info("cleanup %s", ip[0])
+            except Exception as e:
+                logger.error("cleanup %s: %s", cmd, str(e))
+            n += 1
 
+    if not interrupted:
+        if success:
+            sys.stdout.write("SUCCESS\n")
+            sys.exit(0)
+        else:
+            sys.stdout.write("FAILED\n")
+            sys.exit(1)
+    
     
 if __name__ == "__main__":
     main()
