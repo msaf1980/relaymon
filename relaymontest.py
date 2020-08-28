@@ -354,12 +354,19 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
     # Step 2 (Down all endpoint). Go to failed state
     serversListen.append([False, False, False, False, False])
     stageAction.append(None)
-    stageResult.append(False)
+    stageResult.append(True)
     output.append([
         (
             '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
             "warn", "warning", None
         ),
+    ])
+
+    # Step 3. Go to failed state
+    serversListen.append([False, False, False, False, False])
+    stageAction.append(None)
+    stageResult.append(False)
+    output.append([
         (
             '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
             "error", "error", None
@@ -376,8 +383,7 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
             '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
             "info", "down", "DOWN"
         ),
-    ])    
-
+    ])
 
     # (
     #     '{"level":"([a-z]+)","time":"2020-08-26T10:49:59Z","message":"shutdown"}', 
