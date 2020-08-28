@@ -28,7 +28,9 @@ set -f; IFS='-' ; arr=($GIT_VERSION)
 VERSION=${arr[0]}; [ -z "${arr[2]}" ] && RELEASE=${arr[1]} || RELEASE=${arr[1]}.${arr[2]}
 set +f; unset IFS
 
-[ "${VERSION}" = "" -o  "${RELEASE}" = "" ] && {
+[ "$RELEASE" == "" -a "$VERSION" != "" ] && RELEASE=0
+
+if ! echo $VERSION | egrep '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' >/dev/null; then
 	echo "Revision: ${RELEASE}";
 	echo "Version: ${VERSION}";
 	echo
@@ -36,7 +38,7 @@ set +f; unset IFS
 	git tag
 	echo;
 	die 1 "Can't parse version from git";
-}
+fi
 
 [ -r "relaymon" ] || {
     make || die 1 "Build error"
