@@ -13,9 +13,17 @@ import (
 func ipExec(iface string, addr string, scope string, add bool) (string, error, []string) {
 	var ipArgs []string
 	if add {
-		ipArgs = []string{"ip", "addr", "add", "dev", iface, addr, "scope", scope}
+		if scope == "" {
+			ipArgs = []string{"ip", "addr", "add", "dev", iface, addr}
+		} else {
+			ipArgs = []string{"ip", "addr", "add", "dev", iface, addr, "scope", scope}
+		}
 	} else {
-		ipArgs = []string{"ip", "addr", "del", "dev", iface, addr, "scope", scope}
+		if scope == "" {
+			ipArgs = []string{"ip", "addr", "del", "dev", iface, addr}
+		} else {
+			ipArgs = []string{"ip", "addr", "del", "dev", iface, addr, "scope", scope}
+		}
 	}
 
 	var err error
@@ -89,7 +97,7 @@ func IfaceAddrAdd(iface string, a []*net.IPNet) []error {
 	for _, addr := range a {
 		if !FindIPNet(addr, addrs) {
 			//fmt.Printf("%s\n", addr.String())
-			out, err, args := ipExec(iface, addr.String(), "global", true)
+			out, err, args := ipExec(iface, addr.String(), "", true)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s with %s: %s", strings.Join(args, " "), err.Error(), out))
 			}
@@ -111,7 +119,7 @@ func IfaceAddrDel(iface string, a []*net.IPNet) []error {
 			netmask, _ := addr.Mask.Size()
 			//fmt.Printf("%s\n", addr.IP.String())
 			delAddr := addr.IP.String() + "/" + strconv.Itoa(netmask)
-			out, err, args := ipExec(iface, delAddr, "global", false)
+			out, err, args := ipExec(iface, delAddr, "", false)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s with %s: %s", strings.Join(args, " "), err.Error(), out))
 			}

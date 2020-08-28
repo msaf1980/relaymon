@@ -151,7 +151,10 @@ def createServices(names, template):
 
 
 def cmdIPDel(iface, ip, netmask, scope):
-    return "ip addr del dev %s %s/%s scope %s" % (iface, ip, IPAddress(netmask).netmask_bits(), scope)
+    if scope is None or scope == "":
+        return "ip addr del dev %s %s/%s" % (iface, ip, IPAddress(netmask).netmask_bits())
+    else:    
+        return "ip addr del dev %s %s/%s scope %s" % (iface, ip, IPAddress(netmask).netmask_bits(), scope)
 
 def checkIPS(iface, ips):
     status = []
@@ -602,7 +605,7 @@ def main():
     systemdTemplate = "systemd.service"
 
     iface = "lo"
-    scope = "global"
+    scope = None
     ips = [("192.168.155.10", "255.255.255.0"), ("192.168.155.11", "255.255.255.0")]
 
     success = True
