@@ -31,6 +31,9 @@ packages: FORCE
 integration: FORCE
 	${INTEGRATION}
 
+integration-debug: FORCE
+	${INTEGRATION} -d
+
 clean:
 	@rm -f ./${NAME}
 
