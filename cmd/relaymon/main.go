@@ -27,6 +27,7 @@ import (
 var (
 	running bool = true
 	log     zerolog.Logger
+	version string
 )
 
 type CheckStatus struct {
@@ -82,8 +83,13 @@ func execute(command string) (string, error) {
 func main() {
 	configFile := flag.String("config", "/etc/relaymon.yml", "config file (in YAML)")
 	logLevel := flag.String("loglevel", "", "override loglevel")
-	//version := flag.String("version", "", "version")
+	ver := flag.Bool("version", false, "version")
 	flag.Parse()
+
+	if *ver {
+		fmt.Printf("relaymon version %s\n", version)
+		os.Exit(0)
+	}
 
 	cfg, err := config.LoadConfig(*configFile, *logLevel)
 	if err != nil {
