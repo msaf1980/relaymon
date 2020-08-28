@@ -206,18 +206,18 @@ func main() {
 					errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
 					if len(errs) > 0 {
 						for i := range errs {
-							log.Error().Str("action", "up").Msg(errs[i].Error())
+							log.Error().Str("action", "up").Str("type", "network").Msg(errs[i].Error())
 						}
 					} else {
-						log.Info().Str("action", "down").Msg("IP addresses deconfigured")
+						log.Info().Str("action", "down").Str("type", "network").Msg("IP addresses deconfigured")
 					}
 				}
 				if len(cfg.ErrorCmd) > 0 {
 					out, err := execute(cfg.ErrorCmd)
 					if err == nil {
-						log.Info().Str("action", "down").Msg(out)
+						log.Info().Str("action", "down").Str("type", "cmd").Msg(out)
 					} else {
-						log.Error().Str("action", "down").Str("error", err.Error()).Msg(out)
+						log.Error().Str("action", "down").Str("type", "cmd").Str("error", err.Error()).Msg(out)
 					}
 
 				}
@@ -229,19 +229,19 @@ func main() {
 					if len(errs) > 0 {
 						status = checker.ErrorState
 						for i := range errs {
-							log.Error().Str("action", "up").Msg(errs[i].Error())
+							log.Error().Str("action", "up").Str("type", "network").Msg(errs[i].Error())
 						}
 					} else {
-						log.Info().Str("action", "up").Msg("IP addresses configured")
+						log.Info().Str("action", "up").Str("type", "network").Msg("IP addresses configured")
 					}
 				}
 				if len(cfg.SuccessCmd) > 0 {
 					out, err := execute(cfg.SuccessCmd)
 					if err == nil {
-						log.Info().Str("action", "up").Msg(out)
+						log.Info().Str("action", "up").Str("type", "cmd").Msg(out)
 					} else {
 						status = checker.ErrorState
-						log.Error().Str("action", "up").Str("error", err.Error()).Msg(out)
+						log.Error().Str("action", "up").Str("type", "cmd").Str("error", err.Error()).Msg(out)
 					}
 				}
 			}

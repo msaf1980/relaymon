@@ -1,0 +1,14 @@
+[Unit]
+Description=Graphite relay monitoring
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/default/relaymon
+ExecStart=/usr/bin/relaymon $RELAYMON_ARGS
+PIDFile=/var/run/relaymon/relaymon.pid
+
+[Install]
+WantedBy=multi-user.target

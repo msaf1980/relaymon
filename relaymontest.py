@@ -34,6 +34,9 @@ def parse_cmdline():
                          help='cleanup and exit')
     parser.add_argument('-s', '--services', dest='services', default=False, action='store_true',
                          help='create systemd services and exit')
+                        
+    parser.add_argument('-n', '--noips', dest='noips', default=False, action='store_true',
+                         help='run without ips reconfiguration')
 
     return parser.parse_args()
 
@@ -79,7 +82,7 @@ def setServices(names, start):
     if debug:
         outredir = ""
     else:
-        outredir = ">/dev/null 2>&1"
+        outredir = " >/dev/null 2>&1"
 
     n = 0
     for name in names:
@@ -115,10 +118,18 @@ def createServices(names, template):
 
     try:
         for name in names:
-            code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+            proc = subprocess.Popen("systemctl status %s" % name, shell = True, stdout=subprocess.PIPE)
+            outs, errs = proc.communicate()
+            code = proc.wait()
+            if debug:
+                sys.stdout.write(outs)
             if code != 4:
+                # Workaround for not found
+                if code == 3:
+                    if 'Loaded: not-found (' in str(outs):
+                        continue
                 sys.stderr.write("systemctl status %s exit with %d\n" % (name, code))
-                return False        
+                return False
     except Exception as e:
         sys.stderr.write("%s\n" % str(e))
         return False
@@ -143,7 +154,10 @@ def createServices(names, template):
 
 
 def cmdIPDel(iface, ip, netmask, scope):
-    return "ip addr del dev %s %s/%s scope %s" % (iface, ip, IPAddress(netmask).netmask_bits(), scope)
+    if scope is None or scope == "":
+        return "ip addr del dev %s %s/%s" % (iface, ip, IPAddress(netmask).netmask_bits())
+    else:    
+        return "ip addr del dev %s %s/%s scope %s" % (iface, ip, IPAddress(netmask).netmask_bits(), scope)
 
 def checkIPS(iface, ips):
     status = []
@@ -325,8 +339,8 @@ def test(testName, name, config, services, iface, ips, output, stageAction, stag
                 logger.error("stageAction not implemented")
                 return False
 
-            while stage < len(output):
-                if stage > 0:
+            while success and stage < len(output):
+                if stage > 0 and step == 0:
                     setServices(services, servicesStarted[stage])
                     n = 0
                     for a in serversListen[stage]:
@@ -338,9 +352,10 @@ def test(testName, name, config, services, iface, ips, output, stageAction, stag
                             servers[n].stop()
                             logger.info("stop server %d", n)
                         n += 1
-                s = select.select([proc.stdout, proc.stderr], [], [], 60)
+                
+                s = select.select([proc.stdout, proc.stderr], [], [], 30)
                 if len(s[0]) == 0:
-                    logger.error("read from stdout timeout at step %d", step)
+                    logger.error("read from stdout timeout at step %d:%d, wait for '%s'", stage, step, output[stage][step])
                     success = False
                     break
                 if proc.stderr in s[0]:
@@ -349,26 +364,13 @@ def test(testName, name, config, services, iface, ips, output, stageAction, stag
                     break
                 if proc.stdout in s[0]:
                     line = proc.stdout.readline()
-                    sys.stdout.write(line)
+                    sys.stdout.write("Got %s" % line)
                     try:
-                        match = re.match(output[stage][step][0], line)
+                        match = re.match(output[stage][step], line)
                     except Exception as e:
                         logger.error("stage %d failed, missed step %d output", stage, step)
                         return False
                     if match is not None:
-                        groups = match.groups()
-                        i = 1
-                        for g in groups:
-                            if g != output[stage][step][i]:
-                                logger.error("step %d:%d stdout mismatched at %d (got %s, want %s): %s", stage, step,
-                                    i, g, output[stage][step][i], line.rstrip()
-                                )
-                                success = False
-                                break
-                            i += 1
-                        if not success:
-                            break
-
                         step += 1
                         logger.info("step %d:%d ended", stage, step)
                         if step == len(output[stage]):
@@ -430,26 +432,11 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     stageAction.append(None)
     stageResult.append(False)
     output.append([
-        (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
-            "info", "success", None
-        ),
-        (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[1],
-            "error", "error", None
-        ),
-        (
-            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
-            "error", "error", None
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"go to ([a-z]+) state"}',
-            "error", "down", "error"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
-            "info", "down", "DOWN"
-        ),
+        '{"level":"info","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to success"}' % services[0],
+        '{"level":"error","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to error"}' % services[1],
+        '{"level":"error","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to error"}',
+        '{"level":"error","action":"down","time":"[0-9-T:Z\+-]+","message":"go to error state"}',
+        '{"level":"info","action":"down","type":"cmd","time":"[0-9-T:Z\+-]+","message":"DOWN"}',
     ])
 
     # Step 1 (Up one endpoint). Go to success state
@@ -457,24 +444,17 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(True)
-    output.append([
-        (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[1],
-            "info", "success", None
-        ),
-        (
-            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
-            "info", "success", None
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
-            "info", "up", "IP addresses configured"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
-            "info", "up", "UP"
-        ),
-    ])
+    o = [
+        '{"level":"info","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to success"}' % services[1],
+        '{"level":"info","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to success"}',
+    ]
+
+    if len(ips) > 0:
+        o.append('{"level":"info","action":"up","type":"network","time":"[0-9-T:Z\+-]+","message":"IP addresses configured"}')
+
+    o.append('{"level":"info","action":"up","type":"cmd","time":"[0-9-T:Z\+-]+","message":"UP"}')
+
+    output.append(o)
 
     # Step 2 (Down all endpoint). Go to warning state
     serversListen.append([False, False, False, False, False])
@@ -482,10 +462,7 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     stageAction.append(None)
     stageResult.append(True)
     output.append([
-        (
-            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
-            "warn", "warning", None
-        ),
+        '{"level":"warn","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to warning"}',
     ])
 
     # Step 3. Go to failed state
@@ -493,44 +470,37 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(False)
-    output.append([
-        (
-            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
-            "error", "error", None
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"go to ([a-z]+) state"}',
-            "error", "down", "error"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
-            "info", "down", "IP addresses deconfigured"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
-            "info", "down", "DOWN"
-        ),
-    ])
+    o = [
+        '{"level":"error","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to error"}',
+        '{"level":"error","action":"down","time":"[0-9-T:Z\+-]+","message":"go to error state"}',
+    ]
+
+    if len(ips) > 0:    
+        o.append('{"level":"info","action":"down","type":"network","time":"[0-9-T:Z\+-]+","message":"IP addresses deconfigured"}')
+
+    o.append('{"level":"info","action":"down","type":"cmd","time":"[0-9-T:Z\+-]+","message":"DOWN"}')
+
+    output.append(o)
 
     # Step 4. Go to success state
     serversListen.append([True, True, True, True])
     servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(True)
-    output.append([
-        (
-            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
-            "info", "success", None
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
-            "info", "up", "IP addresses configured"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
-            "info", "up", "UP"
-        ),
-    ])
+    o = [
+        '{"level":"info","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to success"}',
+    ]
+
+    if len(ips) > 0:
+        o.append(
+            '{"level":"info","action":"up","type":"network","time":"[0-9-T:Z\+-]+","message":"IP addresses configured"}',
+        )
+
+    o.append(
+        '{"level":"info","action":"up","type":"cmd","time":"[0-9-T:Z\+-]+","message":"UP"}',
+    )
+
+    output.append(o)
 
     # Step 5 (Shutdown relaymontest1). Go to warning state
     serversListen.append([True, True, True, True])
@@ -538,10 +508,7 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     stageAction.append(None)
     stageResult.append(True)
     output.append([
-        (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
-            "warn", "warning", None
-        ),
+        '{"level":"warn","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to warning"}' % services[0],
     ])
 
     # Step 6. Go to failed state
@@ -549,24 +516,17 @@ def testFailSuccessFail1(name, config, services, iface, ips):
     servicesStarted.append([False, True])
     stageAction.append(None)
     stageResult.append(False)
-    output.append([
-        (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
-            "error", "error", None
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"go to ([a-z]+) state"}',
-            "error", "down", "error"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
-            "info", "down", "IP addresses deconfigured"
-        ),
-        (
-            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
-            "info", "down", "DOWN"
-        ),
-    ])
+    o = [
+        '{"level":"error","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to error"}' % services[0],
+        '{"level":"error","action":"down","time":"[0-9-T:Z\+-]+","message":"go to error state"}',
+    ]
+
+    if len(ips) > 0:
+        o.append('{"level":"info","action":"down","type":"network","time":"[0-9-T:Z\+-]+","message":"IP addresses deconfigured"}')
+
+    o.append('{"level":"info","action":"down","type":"cmd","time":"[0-9-T:Z\+-]+","message":"DOWN"}')
+
+    output.append(o)
 
     # (
     #     '{"level":"([a-z]+)","time":"2020-08-26T10:49:59Z","message":"shutdown"}', 
@@ -588,14 +548,18 @@ def main():
         sys.exit(255)
 
     name = "./relaymon"
-    config = "relaymon-test.yml"
 
     services = ["relaymontest1", "relaymontest2"]
     systemdTemplate = "systemd.service"
 
     iface = "lo"
-    scope = "global"
-    ips = [("192.168.155.10", "255.255.255.0"), ("192.168.155.11", "255.255.255.0")]
+    scope = None
+    if args.noips:
+        ips = []
+        config = "relaymon-test-noips.yml"
+    else:
+        ips = [("192.168.155.10", "255.255.255.0"), ("192.168.155.11", "255.255.255.0")]
+        config = "relaymon-test.yml"
 
     success = True
 

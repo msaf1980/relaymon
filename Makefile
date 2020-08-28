@@ -28,9 +28,6 @@ deb: FORCE
 packages: FORCE
 	./contrib/fpm/create_package.sh rpm deb
 
-integration: FORCE
-	${INTEGRATION}
-
 clean:
 	@rm -f ./${NAME}
 

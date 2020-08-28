@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/msaf1980/relaymon/pkg/checker"
@@ -70,13 +71,15 @@ type Service struct {
 
 // ServiceState return SystemdService
 func ServiceState(name string) (*Service, error) {
-	service := &Service{PID: -1}
+	service := &Service{PID: -1, State: UnknownState}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "/bin/systemctl", "status", name)
 	var stdOut bytes.Buffer
+	var stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
+	cmd.Stderr = &stdErr
 	err := cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		service.State = FailedState
@@ -87,8 +90,14 @@ func ServiceState(name string) (*Service, error) {
 		if ok {
 			switch exitErr.ExitCode() {
 			case 3:
-				service.State = StoppedState
-				return service, fmt.Errorf("service %s stopped", name)
+				if strings.Index(stdOut.String(), "Loaded: not-found (Reason") > -1 {
+					// Workaround for not found
+					service.State = NotFoundState
+					return service, fmt.Errorf("service %s not found", name)
+				} else {
+					service.State = StoppedState
+					return service, fmt.Errorf("service %s stopped", name)
+				}
 			case 4:
 				service.State = NotFoundState
 				return service, fmt.Errorf("service %s not found", name)
@@ -110,6 +119,8 @@ func ServiceState(name string) (*Service, error) {
 		if err != nil {
 			service.State = UnknownState
 			return service, fmt.Errorf("service %s failed (parse pid from %s)", name, matches[1])
+		} else {
+			service.State = StartedState
 		}
 	}
 
