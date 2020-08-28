@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+# netifaces and netaddr modules required
+
 import logging
 import multiprocessing
 import sys
@@ -20,12 +22,19 @@ from string import Template
 import argparse
 
 
+debug = False
+
+
 def parse_cmdline():
     parser = argparse.ArgumentParser(description='Run relaymon integration test (as root)')
 
     parser.add_argument('-d', '--debug', dest='debug', default=False, action='store_true',
                          help='debug')
-                    
+    parser.add_argument('-c', '--cleanup', dest='cleanup', default=False, action='store_true',
+                         help='cleanup and exit')
+    parser.add_argument('-s', '--services', dest='services', default=False, action='store_true',
+                         help='create systemd services and exit')
+
     return parser.parse_args()
 
 
@@ -35,6 +44,102 @@ def get_exception_loc():
     lineno = tb.tb_lineno
     filename = f.f_code.co_filename
     return (filename, lineno)
+
+
+def cleanupServices(names):
+    global debug
+    if debug:
+        outredir = ""
+    else:
+        outredir = ">/dev/null 2>&1"
+
+    found = False
+    for name in names:
+        fname = "/etc/systemd/system/%s.service" % name
+        try:
+            code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+            if code == 0:
+                found = True
+                code = subprocess.call("systemctl stop %s%s" % (name, outredir), shell = True)
+                if code != 0:
+                    sys.stderr.write("systemctl stop %s exit with %d\n" % (name, code))
+            if os.path.exists(fname):
+                sys.stdout.write("cleanup systemd: %s\n" % name)
+                found = True
+                os.unlink(fname)
+        except Exception as e:
+            sys.stderr.write("%s: %s\n" % (fname, str(e)))
+
+    if found:
+        subprocess.call("systemctl daemon-reload", shell = True)
+
+
+def setServices(names, start):
+    global debug
+    if debug:
+        outredir = ""
+    else:
+        outredir = ">/dev/null 2>&1"
+
+    n = 0
+    for name in names:
+        code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+        if code == 0 and not start[n]:
+            code = subprocess.call("systemctl stop %s%s" % (name, outredir), shell = True)
+            if code != 0:
+                raise RuntimeError("systemctl stop %s exit with %d" % (name, code))
+            else:
+                code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+                if code != 3:
+                    raise RuntimeError("systemctl status %s exit with %d after stop" % (name, code))    
+                sys.stdout.write("stop systemd: %s\n" % name)
+        elif code != 0 and start[n]:
+            code = subprocess.call("systemctl start %s%s" % (name, outredir), shell = True)
+            if code != 0:
+                raise RuntimeError("systemctl start %s exit with %d" % (name, code))
+            else:
+                code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+                if code != 0:
+                    raise RuntimeError("systemctl status %s exit with %d after start" % (name, code))
+                sys.stdout.write("start systemd: %s\n" % name)
+
+        n += 1
+
+
+def createServices(names, template):
+    global debug
+    if debug:
+        outredir = ""
+    else:
+        outredir = ">/dev/null 2>&1"
+
+    try:
+        for name in names:
+            code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+            if code != 4:
+                sys.stderr.write("systemctl status %s exit with %d\n" % (name, code))
+                return False        
+    except Exception as e:
+        sys.stderr.write("%s\n" % str(e))
+        return False
+    
+    with open(template, 'r') as ifile:
+        data = ifile.read()
+        for name in names:
+            try:
+                with open("/etc/systemd/system/%s.service" % name, 'w') as ofile:
+                    replaced = Template(data).substitute(dict({'name': name}))
+                    ofile.write(replaced)
+                    sys.stdout.write("create systemd: %s\n" % name)
+                    subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+            except Exception as e:
+                raise RuntimeError("can't create systemd service %s: %s" % (name, str(e)))
+  
+    code = subprocess.call("systemctl daemon-reload", shell = True)
+    if code != 0:
+        raise RuntimeError("can't create reload systemd")
+
+    return True
 
 
 def cmdIPDel(iface, ip, netmask, scope):
@@ -156,8 +261,8 @@ def handleConnection(conn, address):
         conn.close()
 
 
-# Base test function (with 5 tcp servers for test)
-def test(testName, name, config, service, iface, ips, output, stageAction, stageResult, serversListen):
+# Base test function (with 5 tcp servers and 2 systemd services for test)
+def test(testName, name, config, services, iface, ips, output, stageAction, stageResult, serversListen, servicesStarted):
     success = False
 
     configRelayTpl = "carbon-c-relay-test.tpl"
@@ -193,6 +298,8 @@ def test(testName, name, config, service, iface, ips, output, stageAction, stage
             logger.error("can't start test tcp servers: %s", str(e))
             return False
 
+        setServices(services, servicesStarted[0])
+
         with open(configRelayTpl, 'r') as ifile:
             data = ifile.read()
             replaced = Template(data).substitute(templateArgs)
@@ -220,6 +327,7 @@ def test(testName, name, config, service, iface, ips, output, stageAction, stage
 
             while stage < len(output):
                 if stage > 0:
+                    setServices(services, servicesStarted[stage])
                     n = 0
                     for a in serversListen[stage]:
                         if a and not servers[n].started:
@@ -307,22 +415,28 @@ def test(testName, name, config, service, iface, ips, output, stageAction, stage
             s.stop()
 
 
-def testNetworkFailSuccessFail1(name, config, service, iface, ips):
+def testFailSuccessFail1(name, config, services, iface, ips):
     testName = "test Fail Success Fail #1"
 
     output = []
     stageAction = []
     stageResult = []
     serversListen = []
+    servicesStarted = []
 
     # Step 0 (startup). Go to failed state
     serversListen.append([False, False, False, False, False])
+    servicesStarted.append([True, False])
     stageAction.append(None)
     stageResult.append(False)
     output.append([
         (
-            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % service,
+            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
             "info", "success", None
+        ),
+        (
+            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[1],
+            "error", "error", None
         ),
         (
             '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
@@ -340,9 +454,14 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
 
     # Step 1 (Up one endpoint). Go to success state
     serversListen.append([False, False, False, False, True])
+    servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(True)
     output.append([
+        (
+            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[1],
+            "info", "success", None
+        ),
         (
             '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
             "info", "success", None
@@ -357,8 +476,9 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
         ),
     ])
 
-    # Step 2 (Down all endpoint). Go to failed state
+    # Step 2 (Down all endpoint). Go to warning state
     serversListen.append([False, False, False, False, False])
+    servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(True)
     output.append([
@@ -370,6 +490,7 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
 
     # Step 3. Go to failed state
     serversListen.append([False, False, False, False, False])
+    servicesStarted.append([True, True])
     stageAction.append(None)
     stageResult.append(False)
     output.append([
@@ -391,15 +512,73 @@ def testNetworkFailSuccessFail1(name, config, service, iface, ips):
         ),
     ])
 
+    # Step 4. Go to success state
+    serversListen.append([True, True, True, True])
+    servicesStarted.append([True, True])
+    stageAction.append(None)
+    stageResult.append(True)
+    output.append([
+        (
+            '{"level":"([a-z]+)","service":"carbon-c-relay clusters","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}',
+            "info", "success", None
+        ),
+        (
+            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
+            "info", "up", "IP addresses configured"
+        ),
+        (
+            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
+            "info", "up", "UP"
+        ),
+    ])
+
+    # Step 5 (Shutdown relaymontest1). Go to warning state
+    serversListen.append([True, True, True, True])
+    servicesStarted.append([False, True])
+    stageAction.append(None)
+    stageResult.append(True)
+    output.append([
+        (
+            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
+            "warn", "warning", None
+        ),
+    ])
+
+    # Step 6. Go to failed state
+    serversListen.append([True, True, True, True])
+    servicesStarted.append([False, True])
+    stageAction.append(None)
+    stageResult.append(False)
+    output.append([
+        (
+            '{"level":"([a-z]+)","service":"%s","time":"[0-9-T:Z\+-]+","message":"state changed to ([a-z]+)"}' % services[0],
+            "error", "error", None
+        ),
+        (
+            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"go to ([a-z]+) state"}',
+            "error", "down", "error"
+        ),
+        (
+            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([a-zA-Z ]+)"}',
+            "info", "down", "IP addresses deconfigured"
+        ),
+        (
+            '{"level":"([a-z]+)","action":"([a-z]+)","time":"[0-9-T:Z\+-]+","message":"([A-Z]+)"}',
+            "info", "down", "DOWN"
+        ),
+    ])
+
     # (
     #     '{"level":"([a-z]+)","time":"2020-08-26T10:49:59Z","message":"shutdown"}', 
     # )
 
-    return test(testName, name, config, service, iface, ips, output, stageAction, stageResult, serversListen)
+    return test(testName, name, config, services, iface, ips, output, stageAction, stageResult, serversListen, servicesStarted)
 
 def main():
+    global debug
     args = parse_cmdline()
-    if args.debug:
+    debug = args.debug
+    if debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
@@ -409,15 +588,41 @@ def main():
         sys.exit(255)
 
     name = "./relaymon"
-    service = "sshd"
     config = "relaymon-test.yml"
+
+    services = ["relaymontest1", "relaymontest2"]
+    systemdTemplate = "systemd.service"
+
     iface = "lo"
     scope = "global"
     ips = [("192.168.155.10", "255.255.255.0"), ("192.168.155.11", "255.255.255.0")]
 
-    sys.stderr.write("%s will be stopped/restarted during test\n" % service)
-
     success = True
+
+    if args.services:
+        createServices(services, systemdTemplate)
+        sys.exit(0)
+
+    if args.cleanup:
+        found, status = checkIPS(iface, ips)
+        if found > 0:
+            printIPS(iface, ips, status)
+            #sys.stderr.write("For remove:\nip addr del dev lo IP/NETMASK scope %s\n" % scope)
+            sys.stderr.write("For remove:\n")
+            n = 0
+            for ip in ips:
+                cmd = ip
+                try:
+                    if status[n][1]:
+                        cmd = cmdIPDel(iface, ip[0], ip[1], scope)
+                        subprocess.call(cmd, shell = True)
+                        sys.stdout.write("cleanup %s\n", ip[0])
+                except Exception as e:
+                    sys.stderr.write("cleanup %s: %s\n", cmd, str(e))
+                n += 1
+
+        cleanupServices(services)
+        sys.exit(1)
 
     found, status = checkIPS(iface, ips)
     if found > 0:
@@ -432,9 +637,16 @@ def main():
 
         sys.exit(255)
 
+    try:
+        if not createServices(services, systemdTemplate):
+            sys.exit(255)
+    except Exception as e:
+        sys.stderr.write("%s\n" % str(e))
+        cleanupServices(services)
+
     interrupted = False
     try:
-        if not testNetworkFailSuccessFail1(name, config, service, iface, ips):
+        if not testFailSuccessFail1(name, config, services, iface, ips):
             success = False
     except KeyboardInterrupt:
         interrupted = True
@@ -457,6 +669,8 @@ def main():
             except Exception as e:
                 logger.error("cleanup %s: %s", cmd, str(e))
             n += 1
+
+    cleanupServices(services)
 
     if not interrupted:
         if success:

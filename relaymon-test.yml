@@ -10,7 +10,8 @@ ips:
    - "192.168.155.11/24"
 
 services:
-  - "sshd"
+  - "relaymontest1"
+  - "relaymontest2"
 
 carbon_c_relay:
   config: "/tmp/relaymon-carbon-c-relay-test.conf"

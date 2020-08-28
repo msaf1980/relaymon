@@ -1,0 +1,6 @@
+[Unit]
+Description=Dummy Service ${name} for relaymon testing
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sleep 60000
