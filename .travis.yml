@@ -13,7 +13,17 @@ script:
 - make test
 - make
 - sudo ./relaymontest.py -n
-#before_deploy:
-#- gem install fpm && make packages
+before_deploy:
+- make
+- gem install fpm && make packages
 #- export RPM_PACKAGE_NAME=$(ls relaymon-*.x86_64.rpm | tail -n1)
 #- export DEB_PACKAGE_NAME=$(ls relaymon-*.amd64.deb | tail -n1)
+deploy:
+  skip_cleanup: true
+  provider: releases
+  api_key: ${GITHUB_API_KEY}
+  file_glob: true
+  file: "*.{deb,rpm}"
+  on:
+    repo: msaf1980/relaymon
+    tags: true
