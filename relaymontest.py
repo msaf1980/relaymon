@@ -79,7 +79,7 @@ def setServices(names, start):
     if debug:
         outredir = ""
     else:
-        outredir = ">/dev/null 2>&1"
+        outredir = " >/dev/null 2>&1"
 
     n = 0
     for name in names:
@@ -115,10 +115,18 @@ def createServices(names, template):
 
     try:
         for name in names:
-            code = subprocess.call("systemctl status %s%s" % (name, outredir), shell = True)
+            proc = subprocess.Popen("systemctl status %s" % name, shell = True, stdout=subprocess.PIPE)
+            outs, errs = proc.communicate()
+            code = proc.wait()
+            if debug:
+                sys.stdout.write(outs)
             if code != 4:
+                # Workaround for not found
+                if code == 3:
+                    if 'Loaded: not-found (' in str(outs):
+                        continue
                 sys.stderr.write("systemctl status %s exit with %d\n" % (name, code))
-                return False        
+                return False
     except Exception as e:
         sys.stderr.write("%s\n" % str(e))
         return False

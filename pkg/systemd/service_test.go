@@ -79,7 +79,7 @@ func TestServiceState(t *testing.T) {
 		want    *Service
 		wantErr bool
 	}{
-		{"not_found", "not_found", &Service{ProcName: "", PID: -1, State: NotFoundState}, true},
+		{"not_found", "relaymon_not_found", &Service{ProcName: "", PID: -1, State: NotFoundState}, true},
 		{"active", active, activeService, false},
 		{"inactive", inactive, inactiveService, true},
 	}
@@ -87,11 +87,19 @@ func TestServiceState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ServiceState(tt.service)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ServiceState() error = %v, wantErr %v", err, tt.wantErr)
+				if err == nil {
+					t.Errorf("ServiceState() error = %v, wantErr %v", err, tt.wantErr)
+				} else {
+					t.Errorf("ServiceState() error = %v, wantErr %v, error '%s'", err, tt.wantErr, err.Error())
+				}
 				return
 			}
 			if got.ProcName != tt.want.ProcName || got.State != tt.want.State {
-				t.Errorf("ServiceState() = %v, want %v", got, tt.want)
+				if err == nil {
+					t.Errorf("ServiceState() = %+v, want %+v", got, tt.want)
+				} else {
+					t.Errorf("ServiceState() = %+v, want %+v, error '%s'", got, tt.want, err.Error())
+				}
 			}
 		})
 	}
@@ -112,8 +120,8 @@ func TestServiceChecker_Status(t *testing.T) {
 		wantMetrics []string
 	}{
 		{
-			name: "not_found", service: "not_found", want: checker.ErrorState,
-			wantMetrics: []string{"systemd.not_found"},
+			name: "not_found", service: "relaymon_not_found", want: checker.ErrorState,
+			wantMetrics: []string{"systemd.relaymon_not_found"},
 		},
 		{
 			name: "active", service: active, want: checker.SuccessState,

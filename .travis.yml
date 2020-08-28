@@ -8,23 +8,12 @@ addons:
     packages:
       - rpm
 install:
-- gem install fpm
 - sudo apt-get -y install python-netifaces python-netaddr
 script:
 - make test
 - make
 - sudo make integration
-- make packages
 #before_deploy:
-#- export PACKAGE_NAME=$(ls relaymon-*.x86_64.rpm | tail -n1)
-#deploy:
-#- provider: script
-#  script: "curl -sS --fail -F \"uploadfile=@${PACKAGE_NAME}\" -H 'token: ${UPLOAD_TOKEN}' \"${UPLOAD_URL}\""
-#  skip_cleanup: true
-#  on:
-#    branch: master
-#- provider: script
-#  script: "curl -sS --fail -F \"uploadfile=@${PACKAGE_NAME}\" -H 'token: ${UPLOAD_TOKEN}' \"${UPLOAD_URL}\""
-#  skip_cleanup: true
-#  on:
-#    tags: true
+#- gem install fpm && make packages
+#- export RPM_PACKAGE_NAME=$(ls relaymon-*.x86_64.rpm | tail -n1)
+#- export DEB_PACKAGE_NAME=$(ls relaymon-*.amd64.deb | tail -n1)
