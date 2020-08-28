@@ -1,1 +1,3 @@
 # relaymon
+
+Graphite relay monitor
