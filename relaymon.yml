@@ -28,7 +28,7 @@
 #carbon_c_relay:
 #  config: "/etc/carbon-c-relay.conf"
 #  required:
-#    - "moira"  
+#    - "moira"
 #
 #services:
-#  - "carbon_c_relay"
+#  - "carbon-c-relay"
