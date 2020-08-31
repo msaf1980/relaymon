@@ -142,7 +142,7 @@ func main() {
 	if cfg.CarbonCRelay.Config != "" {
 		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix, cfg.NetTimeout)
 		if err != nil {
-			log.Error().Str("carbon-c-relay", "load config").Msg(err.Error())
+			log.Fatal().Str("carbon-c-relay", "load config").Msg(err.Error())
 		} else {
 			checker := carbonnetwork.NewNetworkChecker("carbon-c-relay clusters", clusters, cfg.NetTimeout, cfg.FailCount, cfg.CheckCount, cfg.ResetCount)
 			if len(cfg.Relay) > 0 && len(cfg.Prefix) > 0 {
