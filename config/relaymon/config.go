@@ -3,8 +3,10 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
+	"github.com/msaf1980/relaymon/pkg/checker"
 	"gopkg.in/yaml.v2"
 )
 
@@ -34,8 +36,9 @@ type Config struct {
 
 	Services []string `yaml:"services"`
 
-	Relay  string `yaml:"graphite_relay"`
-	Prefix string `yaml:"prefix"`
+	Relay    string `yaml:"graphite_relay"`
+	Prefix   string `yaml:"prefix"`
+	Hostname string `yaml:"hostname"`
 }
 
 func defaultConfig() *Config {
@@ -52,6 +55,7 @@ func defaultConfig() *Config {
 		CarbonCRelay:  CarbonCRelay{Required: []string{}},
 		Relay:         "127.0.0.1",
 		Prefix:        "graphite.relaymon",
+		Hostname:      "",
 	}
 
 	return cfg
@@ -86,6 +90,14 @@ func LoadConfig(configFile string, overrideLogLevel string) (*Config, error) {
 	if len(cfg.SuccessCmd) == 0 && len(cfg.IPs) == 0 {
 		return nil, fmt.Errorf("configuration: recovery_cmd or ips empthy")
 	}
+	if len(cfg.Hostname) == 0 {
+		var err error
+		cfg.Hostname, err = os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("configuration: can't get hostname, %s", err.Error())
+		}
+	}
+	cfg.Prefix += "." + checker.Strip(cfg.Hostname)
 
 	return cfg, nil
 }

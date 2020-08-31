@@ -3,12 +3,12 @@
 #check_count: 6
 #fail_count: 3
 #reset_count: 3
-#recovery_interval: 120s
 
 #net_timeout: 10
 
 #graphite_relay: ""
 #prefix: "graphite.relaymon"
+#hostname: ""
 
 #success_cmd: []
 #error_cmd: []
