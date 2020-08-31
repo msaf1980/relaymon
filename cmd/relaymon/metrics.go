@@ -87,6 +87,7 @@ func (g *GraphiteQueue) Run() {
 					if !g.failed {
 						g.failed = true
 						log.Error().Str("relaymon", "metric").Msg(err.Error())
+						g.graphite.Disconnect()
 					}
 					continue
 				}
