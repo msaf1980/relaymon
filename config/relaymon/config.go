@@ -22,8 +22,6 @@ type Config struct {
 	FailCount  int `yaml:"fail_count"`
 	ResetCount int `yaml:"reset_count"`
 
-	RecoveryInterval time.Duration `yaml:"recovery_interval"`
-
 	NetTimeout time.Duration `yaml:"net_timeout"`
 
 	ErrorCmd   string `yaml:"error_cmd"`
@@ -42,19 +40,18 @@ type Config struct {
 
 func defaultConfig() *Config {
 	cfg := &Config{
-		LogLevel:         "INFO",
-		CheckInterval:    10 * time.Second,
-		CheckCount:       6,
-		FailCount:        3,
-		ResetCount:       4,
-		RecoveryInterval: 120 * time.Second,
-		NetTimeout:       1 * time.Second,
-		Iface:            "lo",
-		IPs:              []string{},
-		Services:         []string{},
-		CarbonCRelay:     CarbonCRelay{Required: []string{}},
-		Relay:            "127.0.0.1",
-		Prefix:           "graphite.relaymon",
+		LogLevel:      "INFO",
+		CheckInterval: 10 * time.Second,
+		CheckCount:    6,
+		FailCount:     3,
+		ResetCount:    4,
+		NetTimeout:    1 * time.Second,
+		Iface:         "lo",
+		IPs:           []string{},
+		Services:      []string{},
+		CarbonCRelay:  CarbonCRelay{Required: []string{}},
+		Relay:         "127.0.0.1",
+		Prefix:        "graphite.relaymon",
 	}
 
 	return cfg
