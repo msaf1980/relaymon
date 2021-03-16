@@ -53,7 +53,7 @@ func (c *Cluster) Check(timestamp int64) (bool, []error) {
 				out <- check{n, neterror.NewNetError(err)}
 			} else {
 				_ = conn.SetWriteDeadline(time.Now().Add(c.timeout))
-				send := []string{c.TestMetrics[n], " 1 ", strconv.FormatInt(timestamp, 10), "\n"}
+				send := []string{c.TestMetrics[n], "1 ", strconv.FormatInt(timestamp, 10), "\n"}
 				for j := range send {
 					_, err = conn.Write([]byte(send[j]))
 					if err != nil {
