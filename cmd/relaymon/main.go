@@ -83,7 +83,7 @@ func execute(command string) (string, error) {
 func main() {
 	configFile := flag.String("config", "/etc/relaymon.yml", "config file (in YAML)")
 	logLevel := flag.String("loglevel", "", "override loglevel")
-	evict := flag.Bool("evict", false, "remove ips and run error command (without run daemon)")
+	evict := flag.Bool("evict", false, "stop relaymon, remove ips and run error command (without run daemon)")
 	ver := flag.Bool("version", false, "version")
 	flag.Parse()
 
@@ -132,6 +132,14 @@ func main() {
 	if *evict {
 		rc := 0
 
+		out, err := execute("systemctl stop " + cfg.Service)
+		if err == nil {
+			log.Info().Str("action", "stop").Str("type", "cmd").Msg(out)
+		} else {
+			log.Error().Str("action", "stop").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+			rc++
+		}
+
 		if len(addrs) > 0 {
 			errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
 			if len(errs) > 0 {
@@ -149,7 +157,6 @@ func main() {
 				log.Error().Str("action", "down").Str("type", "cmd").Str("error", err.Error()).Msg(out)
 				rc++
 			}
-
 		}
 
 		os.Exit(rc)

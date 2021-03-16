@@ -36,6 +36,8 @@ type Config struct {
 
 	Services []string `yaml:"services"`
 
+	Service string `yaml:"service"`
+
 	Relay    string `yaml:"graphite_relay"`
 	Prefix   string `yaml:"prefix"`
 	Hostname string `yaml:"hostname"`
@@ -56,6 +58,7 @@ func defaultConfig() *Config {
 		Relay:         "127.0.0.1",
 		Prefix:        "graphite.relaymon",
 		Hostname:      "",
+		Service:       "relaymon",
 	}
 
 	return cfg
