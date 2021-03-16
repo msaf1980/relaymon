@@ -83,6 +83,7 @@ func execute(command string) (string, error) {
 func main() {
 	configFile := flag.String("config", "/etc/relaymon.yml", "config file (in YAML)")
 	logLevel := flag.String("loglevel", "", "override loglevel")
+	evict := flag.Bool("evict", false, "remove ips and run error command (without run daemon)")
 	ver := flag.Bool("version", false, "version")
 	flag.Parse()
 
@@ -126,6 +127,32 @@ func main() {
 			log.Fatal().Msg(err.Error())
 		}
 		addrs[i].IP = ip
+	}
+
+	if *evict {
+		rc := 0
+
+		if len(addrs) > 0 {
+			errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
+			if len(errs) > 0 {
+				rc++
+				for i := range errs {
+					log.Error().Msg(errs[i].Error())
+				}
+			}
+		}
+		if len(cfg.ErrorCmd) > 0 {
+			out, err := execute(cfg.ErrorCmd)
+			if err == nil {
+				log.Info().Str("action", "down").Str("type", "cmd").Msg(out)
+			} else {
+				log.Error().Str("action", "down").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+				rc++
+			}
+
+		}
+
+		os.Exit(rc)
 	}
 
 	checkers := make([]CheckStatus, len(cfg.Services))
