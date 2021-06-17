@@ -12,7 +12,7 @@ import (
 
 var (
 	skipList0 = map[string]bool{"forward": true, "any_of": true, "failover": true, "useall": true,
-		"carbon_ch": true, "fnv1a_ch": true, "jump_fnv1a_ch": true, "load_balance": true,
+		"carbon_ch": true, "fnv1a_ch": true, "jump_fnv1a_ch": true, "lb": true,
 		"dynamic": true}
 	skipList1 = map[string]bool{"replication": true}
 	stopList  = map[string]bool{"proto": true, "type": true, "transport": true}

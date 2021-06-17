@@ -24,6 +24,7 @@ func TestClusters(t *testing.T) {
 			[]carbonnetwork.Cluster{
 				{Name: "test1", Endpoints: []string{"test1:2003", "test2:2005"}, Required: false},
 				{Name: "test2", Endpoints: []string{"test3:2003", "test4:2005"}, Required: true},
+				{Name: "test3", Endpoints: []string{"test6:2008", "test5:2003"}, Required: true},
 			},
 		},
 	}

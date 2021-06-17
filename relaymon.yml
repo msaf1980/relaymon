@@ -17,6 +17,7 @@
 
 # IP addresses (up/down on success/failure)
 #ips: []
+#service: "relaymon"
 
 #carbon_c_relay:
 #  config: ""
