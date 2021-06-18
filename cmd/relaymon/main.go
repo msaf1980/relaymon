@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 )
 
 var (
-	running bool = true
+	running int32 = 1
 	log     zerolog.Logger
 	version string
 )
@@ -84,8 +85,14 @@ func main() {
 	configFile := flag.String("config", "/etc/relaymon.yml", "config file (in YAML)")
 	logLevel := flag.String("loglevel", "", "override loglevel")
 	evict := flag.Bool("evict", false, "stop relaymon, remove ips and run error command (without run daemon)")
+	waitIp := flag.Duration("waitip", 0, "wait ips is up with timeout (without run daemon)")
 	ver := flag.Bool("version", false, "version")
 	flag.Parse()
+
+	if *waitIp > 0 && *evict {
+		fmt.Fprintf(os.Stderr, "evict and waitip are incompatible")
+		os.Exit(1)
+	}
 
 	if *ver {
 		fmt.Printf("relaymon version %s\n", version)
@@ -107,17 +114,19 @@ func main() {
 	multi := zerolog.MultiLevelWriter(os.Stdout)
 	log = zerolog.New(multi).With().Timestamp().Logger()
 
-	signalChannel := make(chan os.Signal, 2)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		sig := <-signalChannel
-		switch sig {
-		case os.Interrupt:
-			running = false
-		case syscall.SIGTERM:
-			running = false
-		}
-	}()
+	if *waitIp == 0 {
+		signalChannel := make(chan os.Signal, 2)
+		signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			sig := <-signalChannel
+			switch sig {
+			case os.Interrupt:
+				atomic.StoreInt32(&running, 0)
+			case syscall.SIGTERM:
+				atomic.StoreInt32(&running, 0)
+			}
+		}()
+	}
 
 	addrs := make([]*net.IPNet, len(cfg.IPs))
 	for i := range cfg.IPs {
@@ -162,6 +171,43 @@ func main() {
 		os.Exit(rc)
 	}
 
+	if *waitIp > 0 {
+		// wait for ips is ip
+		start := time.Now()
+		for {
+			foundAll := true
+			for _, addr := range addrs {
+				ifaceAddrs, err := netconf.IfaceAddrs(cfg.Iface)
+				if err != nil {
+					log.Error().Str("action", "check").Str("type", "network").Msg(err.Error())
+					os.Exit(2)
+				}
+
+				found := false
+				for _, ifaceAddr := range ifaceAddrs {
+					if addr.IP.Equal(ifaceAddr.(*net.IPNet).IP) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					foundAll = false
+					log.Error().Str("action", "check").Str("type", "network").Msg(addr.IP.String() + " not upped")
+				}
+			}
+			if foundAll {
+				log.Info().Str("action", "check").Str("type", "network").Msg("ips up")
+				os.Exit(0)
+			}
+			if time.Now().Sub(start) >= *waitIp {
+				break
+			}
+			time.Sleep(*waitIp / 10)
+		}
+		log.Error().Str("action", "check").Str("type", "network").Msg("ips down")
+		os.Exit(1)
+	}
+
 	checkers := make([]CheckStatus, len(cfg.Services))
 	for i := range checkers {
 		checkers[i].Checker = systemd.NewServiceChecker(cfg.Services[i], cfg.FailCount, cfg.CheckCount, cfg.ResetCount)
@@ -190,7 +236,7 @@ func main() {
 
 	status := checker.CollectingState
 	checks := len(checkers) + len(netCheckers)
-	for running {
+	for atomic.LoadInt32(&running) == 1 {
 		stepStatus := checker.CollectingState
 		timestamp := time.Now().Unix()
 
@@ -282,7 +328,7 @@ func main() {
 		}
 
 		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
-		if !running {
+		if atomic.LoadInt32(&running) != 1 {
 			break
 		}
 		time.Sleep(cfg.CheckInterval)
