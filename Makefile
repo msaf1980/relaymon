@@ -9,6 +9,9 @@ all: $(NAME)
 
 FORCE:
 
+static: FORCE
+	CGO_ENABLED=0 $(GO) build -ldflags "-X main.version=${VERSION}" ./cmd/${NAME}
+
 $(NAME): FORCE
 	$(GO) build -ldflags "-X main.version=${VERSION}" ./cmd/${NAME}
 
