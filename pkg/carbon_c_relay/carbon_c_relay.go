@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	skipList0 = map[string]bool{"forward": true, "any_of": true, "failover": true, "useall": true,
+	skipList1 = map[string]bool{"forward": true, "any_of": true, "failover": true, "useall": true,
 		"carbon_ch": true, "fnv1a_ch": true, "jump_fnv1a_ch": true, "lb": true,
 		"dynamic": true}
-	skipList1 = map[string]bool{"replication": true}
+	skipList2 = map[string]bool{"replication": true, "connections": true, "ttl": true}
 	stopList  = map[string]bool{"proto": true, "type": true, "transport": true}
 )
 
@@ -32,13 +32,13 @@ func clusterEndpoints(fields []string, required map[string]bool, testPrefix stri
 		if fields[i] == "file" {
 			return nil, nil
 		}
-		_, ok := skipList0[fields[i]]
+		_, ok := skipList1[fields[i]]
 		if ok {
 			i++
 			continue
 		}
 
-		_, ok = skipList1[fields[i]]
+		_, ok = skipList2[fields[i]]
 		if ok {
 			i += 2
 			continue
