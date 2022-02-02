@@ -14,7 +14,7 @@ var (
 	skipList1 = map[string]bool{"forward": true, "any_of": true, "failover": true, "useall": true,
 		"carbon_ch": true, "fnv1a_ch": true, "jump_fnv1a_ch": true, "lb": true,
 		"dynamic": true}
-	skipList2 = map[string]bool{"replication": true, "connections": true, "ttl": true}
+	skipList2 = map[string]bool{"replication": true, "connections": true, "ttl": true, "ttl_jitter": true}
 	stopList  = map[string]bool{"proto": true, "type": true, "transport": true}
 )
 
