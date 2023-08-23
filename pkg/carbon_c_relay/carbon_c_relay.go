@@ -68,7 +68,7 @@ func clusterEndpoints(fields []string, required map[string]bool, testPrefix stri
 }
 
 // Clusters parse config and return clusters
-func Clusters(config string, required []string, testPrefix string, timeout time.Duration) ([]*carbonnetwork.Cluster, error) {
+func Clusters(config string, required []string, testPrefix string, timeout time.Duration, running *int32) ([]*carbonnetwork.Cluster, error) {
 	clusters := make([]*carbonnetwork.Cluster, 0, 2)
 	file, err := os.Open(config)
 	if err != nil {

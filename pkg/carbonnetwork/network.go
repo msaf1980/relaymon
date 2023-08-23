@@ -1,6 +1,7 @@
 package carbonnetwork
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/msaf1980/relaymon/pkg/checker"
 	"github.com/msaf1980/relaymon/pkg/neterror"
+	"github.com/rs/zerolog/log"
 )
 
 // Cluster describe group of network endpoints
@@ -36,25 +38,47 @@ func NewCluster(name string, required bool, testPrefix string, timeout time.Dura
 func (c *Cluster) Append(endpoint string) *Cluster {
 	c.Endpoints = append(c.Endpoints, endpoint)
 	c.Errors = append(c.Errors, nil)
-	testMetric := fmt.Sprintf("%s.test.network.carbon.%s.%s ", c.testPrefix, checker.Strip(c.Name), checker.Strip(endpoint))
+	testMetric := fmt.Sprintf("%s.test.network.carbon.%s.%s", c.testPrefix, checker.Strip(c.Name), checker.Strip(endpoint))
 	c.TestMetrics = append(c.TestMetrics, testMetric)
 	return c
 }
 
 // Check cluster status (success, errors)
-func (c *Cluster) Check(timestamp int64) (bool, []error) {
+func (c *Cluster) Check(ctx context.Context, timestamp int64) (bool, []error) {
 	out := make(chan check, len(c.Endpoints))
 	defer close(out)
 
 	for i := range c.Endpoints {
 		go func(out chan check, n int) {
-			conn, err := net.DialTimeout("tcp", c.Endpoints[n], c.timeout)
+			log.Trace().Str("action", "check").Str("network_checker", "carbon").Int("n", n).Str("endpoint", c.Endpoints[n]).Msg("next check iteration")
+
+			ctxTout, cancel := context.WithTimeout(ctx, c.timeout)
+			defer cancel()
+
+			var d net.Dialer
+
+			conn, err := d.DialContext(ctxTout, "tcp", c.Endpoints[n])
 			if err != nil {
 				out <- check{n, neterror.NewNetError(err)}
 			} else {
-				_ = conn.SetWriteDeadline(time.Now().Add(c.timeout))
-				send := []string{c.TestMetrics[n], "1 ", strconv.FormatInt(timestamp, 10), "\n"}
+
+				writeDone := make(chan struct{})
+				defer close(writeDone)
+				// setup the cancellation to abort writes in process
+				go func() {
+					select {
+					case <-ctx.Done():
+						conn.Close()
+						// Close() can be used if this isn't necessarily a TCP connection
+					case <-writeDone:
+					}
+				}()
+
+				send := []string{c.TestMetrics[n], " 1 ", strconv.FormatInt(timestamp, 10), "\n"}
 				for j := range send {
+
+					log.Trace().Str("action", "check").Str("network_checker", "carbon").Int("n", n).Str("endpoint", c.Endpoints[n]).Int("send", j).Msg("write")
+
 					_, err = conn.Write([]byte(send[j]))
 					if err != nil {
 						conn.Close()
@@ -64,9 +88,16 @@ func (c *Cluster) Check(timestamp int64) (bool, []error) {
 				}
 				if err == nil {
 					err = conn.Close()
+				} else {
+					conn.Close()
 				}
 				out <- check{n, neterror.NewNetError(err)}
+
+				log.Trace().Str("action", "check").Str("network_checker", "carbon").Int("n", n).Str("endpoint", c.Endpoints[n]).Msg("next check iteration")
 			}
+
+			log.Trace().Str("action", "check").Str("network_checker", "carbon").Int("n", n).Str("endpoint", c.Endpoints[n]).Msg("end check iteration")
+
 		}(out, i)
 	}
 
@@ -144,14 +175,14 @@ func (n *NetworkChecker) Name() string {
 }
 
 // Status get result of network status check
-func (n *NetworkChecker) Status(timestamp int64) (checker.State, []string) {
+func (n *NetworkChecker) Status(ctx context.Context, timestamp int64) (checker.State, []string) {
 	successCheck := true
 	events := make([]string, 0)
 
 	failed := 0
 	k := 0
 	for i := range n.clusters {
-		clusterStatus, clusterErrs := n.clusters[i].Check(timestamp)
+		clusterStatus, clusterErrs := n.clusters[i].Check(ctx, timestamp)
 		if !clusterStatus {
 			failed++
 			if n.clusters[i].Required {

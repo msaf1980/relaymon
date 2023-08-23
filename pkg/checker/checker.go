@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"regexp"
 )
 
@@ -69,7 +70,7 @@ type Metric struct {
 type Checker interface {
 	Name() string
 	// Status return check status and events
-	Status(timestamp int64) (State, []string)
+	Status(ctx context.Context, timestamp int64) (State, []string)
 	// Return checker metrics
 	Metrics() []Metric
 }
