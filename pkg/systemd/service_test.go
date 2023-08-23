@@ -2,6 +2,7 @@ package systemd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -113,6 +114,8 @@ func TestServiceChecker_Status(t *testing.T) {
 	active, _ := getServiceForTest(t, true)
 	inactive, _ := getServiceForTest(t, false)
 
+	ctx := context.Background()
+
 	tests := []struct {
 		name        string
 		service     string
@@ -136,7 +139,7 @@ func TestServiceChecker_Status(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewServiceChecker(tt.service, failCount, checkCount, resetCount)
 			for i := 0; i < checkCount+1; i++ {
-				got, _ := s.Status(0)
+				got, _ := s.Status(ctx, 0)
 				want := checker.CollectingState
 				if i >= checkCount-1 {
 					want = tt.want

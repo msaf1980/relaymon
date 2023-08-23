@@ -1,6 +1,7 @@
 package carbonnetwork
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -69,7 +70,7 @@ func (s *tcpServer) accept() {
 			case <-s.stop:
 				s.running = false
 				s.ln.Close()
-				break
+				return
 			}
 		}
 	}()
@@ -140,6 +141,7 @@ func (f *serversFarm) Stop() {
 func TestCluster_Check(t *testing.T) {
 	prefix := "relaymon"
 	timeout := time.Second
+	ctx := context.Background()
 
 	tests := []struct {
 		name           string
@@ -179,7 +181,7 @@ func TestCluster_Check(t *testing.T) {
 			testFarm.AppendTCPServers(tt.cluster.Endpoints, tt.serversFailure)
 			defer testFarm.Stop()
 
-			got, gotErr := tt.cluster.Check(0)
+			got, gotErr := tt.cluster.Check(ctx, 0)
 			if got != tt.want {
 				t.Errorf("%s Cluster.Check() got = %v, want %v", tt.cluster.Name, got, tt.want)
 			}
@@ -207,6 +209,8 @@ func TestNetworkChecker_Status(t *testing.T) {
 	prefix := "relaymon"
 	timeout := time.Second
 
+	ctx := context.Background()
+
 	tests := []struct {
 		name        string
 		clusters    []*Cluster
@@ -221,7 +225,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
-				[]FailureType{noListen, noReadWithClose},
+				{noListen, noReadWithClose},
 			},
 			want: checker.ErrorState,
 		},
@@ -232,7 +236,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
-				[]FailureType{noListen, noFailure},
+				{noListen, noFailure},
 			},
 			want: checker.SuccessState,
 		},
@@ -245,8 +249,8 @@ func TestNetworkChecker_Status(t *testing.T) {
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
-				[]FailureType{noListen, noFailure},
-				[]FailureType{noListen, noReadWithClose},
+				{noListen, noFailure},
+				{noListen, noReadWithClose},
 			},
 			want: checker.ErrorState,
 		},
@@ -259,8 +263,8 @@ func TestNetworkChecker_Status(t *testing.T) {
 					Append("127.0.0.1:0").Append("127.0.0.1:0"),
 			},
 			failures: [][]FailureType{
-				[]FailureType{noListen, noFailure},
-				[]FailureType{noListen, noReadWithClose},
+				{noListen, noFailure},
+				{noListen, noReadWithClose},
 			},
 			want: checker.SuccessState,
 		},
@@ -282,7 +286,7 @@ func TestNetworkChecker_Status(t *testing.T) {
 				}
 			}
 			for i := 0; i < checkCount+1; i++ {
-				got, _ := c.Status(0)
+				got, _ := c.Status(ctx, 0)
 				want := checker.CollectingState
 				if i >= checkCount-1 {
 					want = tt.want

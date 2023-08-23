@@ -26,9 +26,15 @@ import (
 )
 
 var (
-	running int32 = 1
-	log     zerolog.Logger
-	version string
+	running     int32 = 1
+	ctx, cancel       = context.WithCancel(context.Background())
+	log         zerolog.Logger
+	version     string
+
+	actionStop  = "stop"
+	actionCheck = "check"
+	actionDown  = "down"
+	actionUp    = "up"
 )
 
 type CheckStatus struct {
@@ -120,9 +126,9 @@ func main() {
 		go func() {
 			sig := <-signalChannel
 			switch sig {
-			case os.Interrupt:
-				atomic.StoreInt32(&running, 0)
-			case syscall.SIGTERM:
+			case os.Interrupt, syscall.SIGTERM:
+				log.Info().Str("action", actionStop).Msg("stopping")
+				cancel()
 				atomic.StoreInt32(&running, 0)
 			}
 		}()
@@ -141,11 +147,13 @@ func main() {
 	if *evict {
 		rc := 0
 
+		log.Debug().Str("action", actionStop).Msg("stopping")
+
 		out, err := execute("systemctl stop " + cfg.Service)
 		if err == nil {
-			log.Info().Str("action", "stop").Str("type", "cmd").Msg(out)
+			log.Info().Str("action", actionStop).Str("type", "cmd").Msg(out)
 		} else {
-			log.Error().Str("action", "stop").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+			log.Error().Str("action", actionStop).Str("type", "cmd").Str("error", err.Error()).Msg(out)
 			rc++
 		}
 
@@ -161,9 +169,9 @@ func main() {
 		if len(cfg.ErrorCmd) > 0 {
 			out, err := execute(cfg.ErrorCmd)
 			if err == nil {
-				log.Info().Str("action", "down").Str("type", "cmd").Msg(out)
+				log.Info().Str("action", actionDown).Str("type", "cmd").Msg(out)
 			} else {
-				log.Error().Str("action", "down").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+				log.Error().Str("action", actionDown).Str("type", "cmd").Str("error", err.Error()).Msg(out)
 				rc++
 			}
 		}
@@ -179,7 +187,7 @@ func main() {
 			for _, addr := range addrs {
 				ifaceAddrs, err := netconf.IfaceAddrs(cfg.Iface)
 				if err != nil {
-					log.Error().Str("action", "check").Str("type", "network").Msg(err.Error())
+					log.Error().Str("action", actionCheck).Str("type", "network").Msg(err.Error())
 					os.Exit(2)
 				}
 
@@ -192,19 +200,19 @@ func main() {
 				}
 				if !found {
 					foundAll = false
-					log.Error().Str("action", "check").Str("type", "network").Msg(addr.IP.String() + " not upped")
+					log.Error().Str("action", actionCheck).Str("type", "network").Msg(addr.IP.String() + " not upped")
 				}
 			}
 			if foundAll {
-				log.Info().Str("action", "check").Str("type", "network").Msg("ips up")
+				log.Info().Str("action", actionCheck).Str("type", "network").Msg("ips up")
 				os.Exit(0)
 			}
-			if time.Now().Sub(start) >= *waitIp {
+			if time.Since(start) >= *waitIp {
 				break
 			}
 			time.Sleep(*waitIp / 10)
 		}
-		log.Error().Str("action", "check").Str("type", "network").Msg("ips down")
+		log.Error().Str("action", actionCheck).Str("type", "network").Msg("ips down")
 		os.Exit(1)
 	}
 
@@ -220,7 +228,7 @@ func main() {
 
 	// carbon-c-relay
 	if cfg.CarbonCRelay.Config != "" {
-		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix, cfg.NetTimeout)
+		clusters, err := carboncrelay.Clusters(cfg.CarbonCRelay.Config, cfg.CarbonCRelay.Required, cfg.Prefix, cfg.NetTimeout, &running)
 		if err != nil {
 			log.Fatal().Str("carbon-c-relay", "load config").Msg(err.Error())
 		} else {
@@ -236,6 +244,7 @@ func main() {
 
 	status := checker.CollectingState
 	checks := len(checkers) + len(netCheckers)
+BREAK_LOOP:
 	for atomic.LoadInt32(&running) == 1 {
 		stepStatus := checker.CollectingState
 		timestamp := time.Now().Unix()
@@ -243,7 +252,10 @@ func main() {
 		// services
 		success := 0
 		for i := range checkers {
-			s, errs := checkers[i].Checker.Status(timestamp)
+
+			log.Trace().Str("action", actionCheck).Str("checker", checkers[i].Checker.Name()).Msg("next check iteration")
+
+			s, errs := checkers[i].Checker.Status(ctx, timestamp)
 			if s == checker.ErrorState {
 				stepStatus = checker.ErrorState
 			} else if s == checker.SuccessState {
@@ -255,10 +267,15 @@ func main() {
 			for k := range metrics {
 				graphite.Put(metrics[k].Name, metrics[k].Value, timestamp)
 			}
+
+			log.Trace().Str("action", actionCheck).Str("checker", checkers[i].Checker.Name()).Msg("end check iteration")
 		}
 
 		for i := range netCheckers {
-			s, errs := netCheckers[i].Checker.Status(timestamp)
+
+			log.Trace().Str("action", actionCheck).Str("network_checker", netCheckers[i].Checker.Name()).Msg("next check iteration")
+
+			s, errs := netCheckers[i].Checker.Status(ctx, timestamp)
 			if s == checker.ErrorState {
 				stepStatus = checker.ErrorState
 			} else if s == checker.SuccessState {
@@ -270,6 +287,8 @@ func main() {
 			}
 
 			logStatus(s, &netCheckers[i], errs)
+
+			log.Trace().Str("action", actionCheck).Str("network_checker", netCheckers[i].Checker.Name()).Msg("end check iteration")
 		}
 
 		if success == checks {
@@ -280,24 +299,24 @@ func main() {
 			// status changed
 			if stepStatus == checker.ErrorState {
 				// checks failed
-				log.Error().Str("action", "down").Msg("go to error state")
+				log.Error().Str("action", actionStop).Msg("go to error state")
 				status = checker.ErrorState
 				if len(cfg.IPs) > 0 {
 					errs := netconf.IfaceAddrDel(cfg.Iface, addrs)
 					if len(errs) > 0 {
 						for i := range errs {
-							log.Error().Str("action", "up").Str("type", "network").Msg(errs[i].Error())
+							log.Error().Str("action", actionUp).Str("type", "network").Msg(errs[i].Error())
 						}
 					} else {
-						log.Info().Str("action", "down").Str("type", "network").Msg("IP addresses deconfigured")
+						log.Info().Str("action", actionStop).Str("type", "network").Msg("IP addresses deconfigured")
 					}
 				}
 				if len(cfg.ErrorCmd) > 0 {
 					out, err := execute(cfg.ErrorCmd)
 					if err == nil {
-						log.Info().Str("action", "down").Str("type", "cmd").Msg(out)
+						log.Info().Str("action", actionStop).Str("type", "cmd").Msg(out)
 					} else {
-						log.Error().Str("action", "down").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+						log.Error().Str("action", actionStop).Str("type", "cmd").Str("error", err.Error()).Msg(out)
 					}
 
 				}
@@ -309,29 +328,37 @@ func main() {
 					if len(errs) > 0 {
 						status = checker.ErrorState
 						for i := range errs {
-							log.Error().Str("action", "up").Str("type", "network").Msg(errs[i].Error())
+							log.Error().Str("action", actionUp).Str("type", "network").Msg(errs[i].Error())
 						}
 					} else {
-						log.Info().Str("action", "up").Str("type", "network").Msg("IP addresses configured")
+						log.Info().Str("action", actionUp).Str("type", "network").Msg("IP addresses configured")
 					}
 				}
 				if len(cfg.SuccessCmd) > 0 {
 					out, err := execute(cfg.SuccessCmd)
 					if err == nil {
-						log.Info().Str("action", "up").Str("type", "cmd").Msg(out)
+						log.Info().Str("action", actionUp).Str("type", "cmd").Msg(out)
 					} else {
 						status = checker.ErrorState
-						log.Error().Str("action", "up").Str("type", "cmd").Str("error", err.Error()).Msg(out)
+						log.Error().Str("action", actionUp).Str("type", "cmd").Str("error", err.Error()).Msg(out)
 					}
 				}
 			}
 		}
 
 		graphite.Put("status", strconv.Itoa(int(stepStatus)), timestamp)
-		if atomic.LoadInt32(&running) != 1 {
-			break
+
+		log.Trace().Str("action", actionCheck).Msg("sleep")
+
+		sleepInterval := cfg.CheckInterval
+		for sleepInterval > time.Second {
+			if atomic.LoadInt32(&running) == 0 {
+				break BREAK_LOOP
+			}
+			time.Sleep(time.Second)
+			sleepInterval -= time.Second
 		}
-		time.Sleep(cfg.CheckInterval)
+		time.Sleep(sleepInterval)
 	}
 
 	graphite.Stop()
